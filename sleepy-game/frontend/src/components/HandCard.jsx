@@ -2,76 +2,96 @@ import React from 'react';
 import { useDrag } from 'react-dnd';
 import './HandCard.css';
 
-// HandCard Component: Represents a single card in a player's hand.
-// It can be draggable if it's the current player's turn.
-// Special handling for 'theif' card type to trigger a direct click action.
-function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceId, isStealingMode, isOpponentCard = false }) {
-  // useDrag hook for drag-and-drop functionality.
+function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceId, isStealingMode, isOpponentCard = false, isUnderTheftAttempt = false, thiefPlayerId = null }) {
   const [{ isDragging }, drag] = useDrag(() => ({
-    type: 'card', // Defines the type of draggable item
+    type: 'card',
     item: { 
-      cardIndex: index, // Index of the card in the hand
-      cardType: card.type, // Type of the card (e.g., 'attack', 'support', 'theif')
-      cardEffectValue: card.effect.value, // Value of the card's effect (if applicable)
-      playerSourceId: playerSourceId // ID of the player who owns this card
+      cardIndex: index, 
+      cardType: card.type, 
+      cardEffectValue: card.effect && card.effect.value !== undefined ? card.effect.value : null, 
+      playerSourceId: playerSourceId 
     },
-    // canDrag determines if the card is draggable.
-    // Cards are draggable if it's the player's turn (isDraggable) AND
-    // it's NOT a 'theif' card (as 'theif' is clicked, not dragged to a target) AND
-    // it's NOT an opponent's card (opponent's cards are not draggable by player) AND
-    // we are NOT in stealing mode (in stealing mode, hand cards are for choosing)
-    canDrag: isDraggable && card.type !== 'theif' && !isOpponentCard && !isStealingMode,
+    canDrag: isDraggable && card.type !== 'theif' && !isOpponentCard && !isStealingMode && !isUnderTheftAttempt,
     collect: (monitor) => ({
-      isDragging: monitor.isDragging(), // True if the card is currently being dragged
+      isDragging: monitor.isDragging(),
     }),
-  }), [index, card, isDraggable, playerSourceId, isOpponentCard, isStealingMode]);
+  }), [index, card, isDraggable, playerSourceId, isOpponentCard, isStealingMode, isUnderTheftAttempt]);
 
-  // Determine the CSS class for the card, including type-specific styles.
   const cardClass = `hand-card 
     ${isSelected ? 'selected' : ''} 
     ${isDragging ? 'dragging' : ''} 
     ${card.cssClass || 'card-default'}
     ${isStealingMode && isOpponentCard ? 'stealing-target' : ''}
-    ${isOpponentCard && !isStealingMode ? 'opponent-hidden' : ''}
+    ${isOpponentCard && !isStealingMode && !isUnderTheftAttempt ? 'opponent-hidden' : ''}
+    ${isUnderTheftAttempt && card.type === 'anti_theft' && playerSourceId !== thiefPlayerId ? 'anti-theft-highlight' : ''}
     `;
 
-  // handleClick function to manage card clicks.
   const handleClick = () => {
-    // If in stealing mode and this is an opponent's card, it means the player is selecting it to steal.
-    if (isStealingMode && isOpponentCard) {
-      onClick(index); // Pass the index of the selected opponent's card
-    } 
-    // If it's a 'theif' card and it's the player's turn and not already in stealing mode.
-    else if (card.type === 'theif' && isDraggable && !isStealingMode) {
-      // No alert, just trigger the action to enter stealing mode
-      onClick(index, card.type, null); 
-    } 
-    // For other cards (attack, support, etc.) and it's player's turn,
-    // this click handler is generally used for selection/targeting if needed,
-    // but primary interaction is drag & drop.
-    else if (isDraggable && !isOpponentCard && !isStealingMode) {
-      onClick(index); 
+    if (isClickable) {
+      if (isStealingMode && isOpponentCard) {
+        onClick(index); 
+      } 
+      else if (isUnderTheftAttempt && !isOpponentCard && card.type === 'anti_theft') {
+          onClick(index, card.type, null, true);
+      }
+      else if (card.type === 'theif' && isDraggable && !isStealingMode && !isUnderTheftAttempt) {
+        onClick(index, card.type); 
+      } 
+      else if (isDraggable && !isOpponentCard && !isStealingMode && !isUnderTheftAttempt) {
+        onClick(index); 
+      }
     }
+  };
+
+  const isClickable = (isStealingMode && isOpponentCard) || 
+                      (isUnderTheftAttempt && !isOpponentCard && card.type === 'anti_theft' && playerSourceId !== thiefPlayerId) || 
+                      (card.type === 'theif' && isDraggable && !isStealingMode && !isUnderTheftAttempt);
+
+
+  const renderCardEffect = () => {
+    if (card.effect && card.effect.type) {
+      if (card.effect.type === 'force_sleep') return 'Instant Sleep!';
+      if (card.effect.type === 'steal_card') return 'Steal Cards!';
+      if (card.effect.type === 'counter_theft') return 'Counter Theft!';
+      if (card.effect.type === 'protect') return 'Protect!';
+      if (card.effect.type === 'remove_protection') return 'Dispel!';
+  
+      if (card.effect.value !== undefined && card.effect.value !== null) {
+        const sign = card.effect.value > 0 ? '+' : '';
+        return `${sign}${card.effect.value} hours`;
+      }
+    }
+    return ''; 
+  };
+
+  // Helper to generate image path for card
+  const getCardImagePath = (cardName) => {
+    // Assuming image files are in public/assets and named after card's lowercase name, hyphenated
+    // e.g., "Stay up late" -> "stay-up-late.png"
+    const formattedName = cardName.toLowerCase().replace(/\s/g, '-');
+    return `/assets/action/${formattedName}.png`; // Or .jpeg if your files are JPEG
   };
 
   return (
     <div
-      // Only attach drag ref if the card is draggable and not a thief card, and not in stealing mode or opponent's card
-      ref={isDraggable && card.type !== 'theif' && !isOpponentCard && !isStealingMode ? drag : null}
+      ref={isDraggable && card.type !== 'theif' && !isOpponentCard && !isStealingMode && !isUnderTheftAttempt ? drag : null}
       className={cardClass}
-      onClick={isDraggable || (isStealingMode && isOpponentCard) ? handleClick : null} // Enable click if draggable or in stealing mode on opponent card
+      onClick={isClickable ? handleClick : null}
       style={{ opacity: isDragging ? 0.5 : 1 }}
     >
+      <div className="card-image-container"> {/* New container for image */}
+        <img 
+          src={getCardImagePath(card.name)} 
+          alt={card.name} 
+          className="card-icon" 
+          onError={(e) => { e.target.onerror = null; e.target.src = '/assets/default-card-icon.png'; }} // Fallback image
+        />
+      </div>
       <h3>{card.name}</h3>
       <p className="card-description">{card.description}</p>
-      <p className="card-effect">
-        {card.effect.type === 'force_sleep' ? 'Instant Sleep!' :
-         card.effect.type === 'steal_card' ? 'Steal Cards!' : // New display for Theif card
-         (card.effect.type === 'add_sleep' ? '+' : '') + card.effect.value + ' hours'}
-      </p>
-      {/* Show card content only if it's not an opponent's card OR if it's an opponent's card AND we are in stealing mode */}
-      {(isOpponentCard && !isStealingMode) ? (
-        <div className="card-back">?</div> // Simple card back for hidden opponent cards
+      <p className="card-effect">{renderCardEffect()}</p>
+      {(isOpponentCard && !isStealingMode && !isUnderTheftAttempt) ? (
+        <div className="card-back">?</div>
       ) : null}
     </div>
   );

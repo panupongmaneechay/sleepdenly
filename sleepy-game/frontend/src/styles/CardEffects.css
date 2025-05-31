@@ -79,3 +79,12 @@ body.dark-mode .effect-theif {
     color: #d2b48c; /* Tan */
     text-shadow: 0 0 5px rgba(210, 180, 140, 0.7);
 }
+
+.effect-anti-theft {
+    color: #ffd700; /* Gold for anti-theft */
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.7);
+}
+body.dark-mode .effect-anti-theft {
+    color: #ffaa00; /* Darker Gold for dark mode */
+    text-shadow: 0 0 5px rgba(255, 170, 0, 0.7);
+}

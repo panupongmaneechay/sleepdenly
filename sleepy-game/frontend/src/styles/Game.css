@@ -1,4 +1,31 @@
-/* ... (existing styles) ... */
+/* Main layout for the entire game screen */
+.game-container {
+    display: flex; /* Use flexbox for the main layout */
+    justify-content: center; /* Center content horizontally */
+    align-items: flex-start; /* Align items to the start (top) */
+    gap: 20px; /* Space between main sections */
+    padding: 20px;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+/* Area containing both player zones, player hand, and the new info/log area */
+.game-board-area {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex-grow: 1; /* Allow it to take available space */
+    max-width: 900px; /* Limit overall width for better readability */
+}
+
+/* Specific styling for the actual game board (player zones) */
+.game-board {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    /* No flex-grow here, as game-board-area handles the main layout */
+}
+
 
 .player-hand-container {
   margin-top: 20px;
@@ -64,4 +91,160 @@ body.dark-mode .character-card.drop-target {
 }
 body.dark-mode .hand-card.dragging {
     background-color: rgba(26, 43, 60, 0.7);
+}
+
+/* New: Container for Information Panel and Game Log */
+.info-and-log-area {
+    display: flex;
+    flex-direction: column;
+    gap: 20px; /* Space between info panel and game log */
+    width: 100%; /* Take full width of its parent */
+    margin-top: 20px; /* Space below player hand */
+}
+
+/* Keep InformationPanel styles */
+.information-panel {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+body.dark-mode .information-panel {
+  background-color: #333;
+  border-color: #666;
+  color: #f0f0f0;
+}
+
+.information-panel h2 {
+  margin-top: 0;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+body.dark-mode .information-panel h2 {
+  color: #f0f0f0;
+  border-bottom-color: #555;
+}
+
+.information-panel p {
+  margin: 5px 0;
+  font-size: 0.95em;
+}
+
+.information-panel strong {
+  color: #007bff;
+}
+body.dark-mode .information-panel strong {
+  color: #87CEEB;
+}
+
+.info-description {
+  font-style: italic;
+  color: #666;
+  margin-top: 10px;
+}
+body.dark-mode .info-description {
+  color: #ccc;
+}
+
+
+/* Adjustments for game-messages-area (now inside info-and-log-area) */
+.game-messages-area {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    height: fit-content; 
+    /* No margin-top here as it's handled by info-and-log-area's gap */
+}
+
+body.dark-mode .game-messages-area {
+    background-color: #2c3e50;
+    border-color: #34495e;
+    color: #ecf0f1;
+}
+
+.game-messages-area h2 {
+    margin-top: 0;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+body.dark-mode .game-messages-area h2 {
+    color: #f0f0f0;
+    border-bottom-color: #555;
+}
+
+.game-messages-area p {
+    margin: 5px 0;
+    font-size: 0.95em;
+}
+
+.game-messages-area .your-turn {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.game-messages-area .opponent-turn {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.game-messages-area .game-over-message {
+    font-size: 1.5em;
+    color: #007bff;
+    margin-top: 15px;
+}
+body.dark-mode .game-messages-area .game-over-message {
+    color: #87CEEB;
+}
+
+.steal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px dashed #ccc;
+}
+body.dark-mode .steal-actions {
+    border-top-color: #555;
+}
+
+.steal-prompt {
+    font-weight: bold;
+    color: #007bff;
+    text-align: center; /* Center the prompt text */
+    margin-bottom: 5px;
+}
+body.dark-mode .steal-prompt {
+    color: #87CEEB;
+}
+
+/* Styles for opponent's hand when revealed for stealing */
+.opponent-hand-for-steal {
+    background-color: #f0f8ff; /* AliceBlue background */
+    border: 2px dashed #007bff;
+    border-radius: 8px;
+    padding: 10px;
+    margin-top: 20px; /* Space below opponent's character zone */
+    text-align: center;
+}
+body.dark-mode .opponent-hand-for-steal {
+    background-color: #0d1a26; /* Darker blue for dark mode */
+    border-color: #87CEEB;
+}
+
+.opponent-hand-for-steal h3 {
+    margin-top: 0;
+    color: #007bff;
+    margin-bottom: 10px;
+}
+body.dark-mode .opponent-hand-for-steal h3 {
+    color: #87CEEB;
 }

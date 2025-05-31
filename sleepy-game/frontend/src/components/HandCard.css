@@ -1,9 +1,9 @@
 .hand-card {
-  width: 120px;
-  height: 150px;
+  width: 120px; /* Keep overall card width */
+  height: 150px; /* Keep overall card height */
   border: 1px solid #007bff; /* Default blue border */
   border-radius: 8px;
-  padding: 10px;
+  padding: 3px; /* Reduced padding further */
   text-align: center;
   cursor: pointer;
   background-color: #e0f2f7; /* Light blue */
@@ -11,7 +11,8 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
+  justify-content: space-between;
+  align-items: center;
 }
 
 body.dark-mode .hand-card {
@@ -35,14 +36,46 @@ body.dark-mode .hand-card.selected {
   box-shadow: 0 0 15px rgba(255, 255, 0, 0.5);
 }
 
+/* Adjusted: Styles for card image container to be even larger */
+.card-image-container {
+    width: 110px; /* Increased width even more */
+    height: 80px; /* Adjusted height slightly */
+    margin-top: 2px; /* Reduced margin top */
+    margin-bottom: 2px; /* Reduced margin bottom */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    /* border: 1px dashed #ccc; /* Optional: for debugging layout */
+}
+
+.card-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* Start with 'contain', if still too small, try 'cover' */
+    /* object-fit: cover; /* Alternative: fills the container, might crop */
+}
+
 .hand-card h3 {
-  margin: 5px 0;
-  font-size: 1em;
+  margin: 1px 0; /* Reduced margin further */
+  font-size: 0.85em; /* Slightly smaller font size */
+  line-height: 1.1; /* Adjusted line height */
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .card-description {
-  font-size: 0.8em;
+  font-size: 0.65em; /* Smaller font size */
   color: #666;
+  text-align: center;
+  flex-grow: 1;
+  line-height: 1.1; /* Adjusted line height */
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* Still limit to 2 lines */
+  -webkit-box-orient: vertical;
 }
 body.dark-mode .card-description {
   color: #bbb;
@@ -50,25 +83,27 @@ body.dark-mode .card-description {
 
 .card-effect {
   font-weight: bold;
-  color: #555; /* Default effect color */
+  color: #555;
+  margin-top: auto;
+  font-size: 0.85em; /* Slightly smaller font size */
 }
 body.dark-mode .card-effect {
   color: #ddd;
 }
 
-/* New: Card Type Specific Styles */
+/* All other existing card type specific styles (unchanged) */
 .hand-card.card-attack {
-  border-color: #dc3545; /* Red border */
-  background-color: #f8d7da; /* Light red background */
-  color: #721c24; /* Dark red text */
+  border-color: #dc3545;
+  background-color: #f8d7da;
+  color: #721c24;
 }
 body.dark-mode .hand-card.card-attack {
-  border-color: #ff6347; /* Tomato red */
-  background-color: #4a1c1d; /* Darker red */
-  color: #ffcccc; /* Lighter red text */
+  border-color: #ff6347;
+  background-color: #4a1c1d;
+  color: #ffcccc;
 }
 .hand-card.card-attack .card-effect {
-  color: #dc3545; /* Red effect text */
+  color: #dc3545;
 }
 body.dark-mode .hand-card.card-attack .card-effect {
   color: #ff6347;
@@ -76,32 +111,32 @@ body.dark-mode .hand-card.card-attack .card-effect {
 
 
 .hand-card.card-support {
-  border-color: #28a745; /* Green border */
-  background-color: #d4edda; /* Light green background */
-  color: #155724; /* Dark green text */
+  border-color: #28a745;
+  background-color: #d4edda;
+  color: #155724;
 }
 body.dark-mode .hand-card.card-support {
-  border-color: #7FFF00; /* Chartreuse */
-  background-color: #1a4f1a; /* Darker green */
-  color: #ccffcc; /* Lighter green text */
+  border-color: #7FFF00;
+  background-color: #1a4f1a;
+  color: #ccffcc;
 }
 .hand-card.card-support .card-effect {
-  color: #28a745; /* Green effect text */
+  color: #28a745;
 }
 body.dark-mode .hand-card.card-support .card-effect {
   color: #7FFF00;
 }
 
 .hand-card.card-lucky {
-  border-color: #ffc107; /* Orange border */
-  background-color: #fff3cd; /* Light yellow background */
-  color: #856404; /* Dark yellow text */
-  box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); /* Glowing effect for lucky cards */
+  border-color: #ffc107;
+  background-color: #fff3cd;
+  color: #856404;
+  box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
 }
 body.dark-mode .hand-card.card-lucky {
-  border-color: #FFFF00; /* Brighter yellow */
-  background-color: #4d4013; /* Darker yellow */
-  color: #ffe066; /* Lighter yellow text */
+  border-color: #FFFF00;
+  background-color: #4d4013;
+  color: #ffe066;
   box-shadow: 0 0 10px rgba(255, 255, 0, 0.7);
 }
 .hand-card.card-lucky .card-effect {
@@ -112,14 +147,14 @@ body.dark-mode .hand-card.card-lucky .card-effect {
 }
 
 .hand-card.card-defensive {
-  border-color: #6f42c1; /* Purple border */
-  background-color: #e6e6fa; /* Lavender background */
-  color: #4b0082; /* Indigo text */
+  border-color: #6f42c1;
+  background-color: #e6e6fa;
+  color: #4b0082;
 }
 body.dark-mode .hand-card.card-defensive {
-  border-color: #b366ff; /* Lighter purple */
-  background-color: #3b2c55; /* Darker purple */
-  color: #d6b3ff; /* Lighter text */
+  border-color: #b366ff;
+  background-color: #3b2c55;
+  color: #d6b3ff;
 }
 .hand-card.card-defensive .card-effect {
   color: #6f42c1;
@@ -129,14 +164,14 @@ body.dark-mode .hand-card.card-defensive .card-effect {
 }
 
 .hand-card.card-dispel {
-  border-color: #00bcd4; /* Cyan border */
-  background-color: #e0f7fa; /* Light cyan background */
-  color: #006064; /* Dark cyan text */
+  border-color: #00bcd4;
+  background-color: #e0f7fa;
+  color: #006064;
 }
 body.dark-mode .hand-card.card-dispel {
-  border-color: #4dd0e1; /* Lighter cyan */
-  background-color: #003a3d; /* Darker cyan */
-  color: #b2ebf2; /* Lighter text */
+  border-color: #4dd0e1;
+  background-color: #003a3d;
+  color: #b2ebf2;
 }
 .hand-card.card-dispel .card-effect {
   color: #00bcd4;
@@ -145,22 +180,96 @@ body.dark-mode .hand-card.card-dispel .card-effect {
   color: #4dd0e1;
 }
 
-/* New: Theif Card Style */
+/* Theif Card Style */
 .hand-card.card-theif {
-  border-color: #8b4513; /* SaddleBrown border */
-  background-color: #f5deb3; /* Wheat background */
-  color: #4a2d0d; /* Dark brown text */
-  box-shadow: 0 0 10px rgba(139, 69, 19, 0.5); /* Brown glow */
+  border-color: #8b4513;
+  background-color: #f5deb3;
+  color: #4a2d0d;
+  box-shadow: 0 0 10px rgba(139, 69, 19, 0.5);
 }
 body.dark-mode .hand-card.card-theif {
-  border-color: #d2b48c; /* Tan */
-  background-color: #5c3b2e; /* Darker brown */
-  color: #f0e68c; /* Khaki text */
-  box-shadow: 0 0 10px rgba(210, 180, 140, 0.7);
+  border-color: #d2b48c;
+  background-color: #5c3b2e;
+  color: #f0e68c;
+  box-shadow: 0 0 10px rgba(255, 255, 0, 0.7);
 }
 .hand-card.card-theif .card-effect {
   color: #8b4513;
 }
 body.dark-mode .hand-card.card-theif .card-effect {
   color: #d2b48c;
+}
+
+/* Anti-Theft Card Style */
+.hand-card.card-anti-theft {
+  border-color: #ffd700;
+  background-color: #fffacd;
+  color: #856404;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+body.dark-mode .hand-card.card-anti-theft {
+  border-color: #ffaa00;
+  background-color: #4d4013;
+  color: #ffe066;
+  box-shadow: 0 0 10px rgba(255, 170, 0, 0.7);
+}
+.hand-card.card-anti-theft .card-effect {
+  color: #ffd700;
+}
+body.dark-mode .hand-card.card-anti-theft .card-effect {
+  color: #ffaa00;
+}
+
+
+/* Highlight for anti-theft cards when theft is attempted */
+.hand-card.anti-theft-highlight {
+    border: 3px solid #ffcc00;
+    box-shadow: 0 0 20px rgba(255, 204, 0, 0.9);
+    transform: scale(1.08);
+    cursor: pointer;
+}
+body.dark-mode .hand-card.anti-theft-highlight {
+    border-color: #ffaa00;
+    box-shadow: 0 0 20px rgba(255, 170, 0, 0.9);
+}
+
+/* Highlight for opponent's cards being targeted for stealing */
+.hand-card.stealing-target {
+    border: 3px solid #007bff;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.7);
+    transform: scale(1.05);
+    cursor: pointer;
+}
+body.dark-mode .hand-card.stealing-target {
+    border-color: #87CEEB;
+    box-shadow: 0 0 15px rgba(135, 206, 235, 0.9);
+}
+
+/* Style for hidden opponent cards */
+.hand-card.opponent-hidden {
+  background-color: #555;
+  color: #eee;
+  border-color: #333;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.hand-card.opponent-hidden .card-back {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 3em;
+  font-weight: bold;
+}
+
+.hand-card.opponent-hidden .card-image-container,
+.hand-card.opponent-hidden h3,
+.hand-card.opponent-hidden .card-description,
+.hand-card.opponent-hidden .card-effect {
+  visibility: hidden;
 }

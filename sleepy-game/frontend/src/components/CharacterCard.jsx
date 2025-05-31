@@ -12,7 +12,6 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: 'card',
     canDrop: (item, monitor) => {
-      // Theif card cannot be dropped on a character, so it should always return false here.
       if (item.cardType === 'theif') return false; 
       
       if (!isDroppable || character.is_asleep) return false; 
@@ -55,13 +54,11 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
         icon = '⭐'; // หรือ '🌟'
         className = 'effect-lucky';
       }
-      // Note: No 'theif' effect here as it's not dropped on a character.
       
       setEffectIcon(icon);
       setEffectClass(className);
       setEffect(Date.now()); // Update state to trigger animation
 
-      // Pass all necessary info to the parent handler
       onCardDrop(item.cardIndex, character.id, item.cardType, targetPlayerId, playingPlayerId);
     },
     collect: (monitor) => ({
@@ -89,9 +86,25 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
     ${character.is_protected ? 'protected' : ''} 
     ${isOver && canDrop ? 'drop-target' : ''}`;
 
+  // Helper to generate image path for character
+  const getCharacterImagePath = (name) => {
+    // Assuming image files are in public/assets and named after character's lowercase name, hyphenated
+    // e.g., "Rickie" -> "rickie.png"
+    const formattedName = name.toLowerCase().replace(/\s/g, '-');
+    // You can use .jpeg if your files are JPEG: `/assets/${formattedName}.jpeg`
+    console.log('=====',formattedName);
+    
+    return `/assets/character/${formattedName}.png`; 
+  };
+
   return (
     <div ref={drop} className={cardClass} onClick={() => onClick(character.id)}>
-      <img src={`/assets/${character.name.toLowerCase().replace(/\s/g, '-')}.png`} alt={character.name} className="character-avatar" onError={(e) => e.target.src = '/assets/default-avatar.png'}/>
+      <img 
+        src={getCharacterImagePath(character.name)} 
+        alt={character.name} 
+        className="character-avatar" 
+        onError={(e) => { e.target.onerror = null; e.target.src = '/assets/default-avatar.png'; }} // Fallback image
+      />
       <div className="character-info">
         <h3>{character.name}</h3>
         <p>{character.age} years old</p>

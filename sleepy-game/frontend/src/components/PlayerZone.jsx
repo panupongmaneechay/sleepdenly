@@ -1,9 +1,9 @@
 import React from 'react';
 import CharacterCard from './CharacterCard';
-import HandCard from './HandCard'; // Import HandCard
+import HandCard from './HandCard';
 import './PlayerZone.css';
 
-function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick, onCardDrop, isCurrentTurn, isOpponentZone, myPlayerId, currentTurnPlayerId, isStealingMode, opponentHand, onCardSelectedForSteal, maxStealableCards, selectedCardsToStealCount, selectedOpponentCardIndices }) {
+function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick, onCardDrop, isCurrentTurn, isOpponentZone, myPlayerId, currentTurnPlayerId, isStealingMode, opponentHand, onCardSelectedForSteal, maxStealableCards, selectedCardsToStealCount, selectedOpponentCardIndices, isUnderTheftAttempt, thiefPlayerId }) {
   const zoneClass = `player-zone ${isCurrentTurn ? 'current-turn-highlight' : ''}`;
   
   return (
@@ -25,17 +25,16 @@ function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick
             character={char} 
             onClick={onCharacterClick} 
             onCardDrop={onCardDrop}
-            isDroppable={myPlayerId === currentTurnPlayerId && !char.is_asleep && !isStealingMode} 
+            isDroppable={myPlayerId === currentTurnPlayerId && !char.is_asleep && !isStealingMode && !isUnderTheftAttempt} 
             targetPlayerId={char.id.includes('player1') ? 'player1' : 'player2'} 
           />
         ))}
       </div>
 
-      {/* New: Display opponent's hand if in stealing mode and it's the opponent's zone */}
       {isStealingMode && isOpponentZone && opponentHand && (
         <div className="opponent-hand-for-steal">
           <h3>Opponent's Hand:</h3>
-          <div className="player-hand"> {/* Reuse player-hand style for layout */}
+          <div className="player-hand">
             {opponentHand.map((card, index) => (
               <HandCard
                 key={`opponent-card-${index}-${card.name}`}
@@ -46,7 +45,9 @@ function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick
                 onClick={onCardSelectedForSteal} 
                 isStealingMode={isStealingMode}
                 isOpponentCard={true}
-                isSelected={selectedOpponentCardIndices.includes(index)}
+                isSelected={selectedOpponentCardIndices.includes(index)} 
+                isUnderTheftAttempt={isUnderTheftAttempt}
+                thiefPlayerId={thiefPlayerId}
               />
             ))}
           </div>
