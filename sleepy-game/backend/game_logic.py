@@ -25,7 +25,8 @@ ACTION_CARD_TEMPLATES = [
     {"name": "Lucky Sleep", "type": "lucky", "effect": {"type": "force_sleep"}, "description": "Force your character to sleep instantly!", "cssClass": "card-lucky", "rarity": 0.2}, # 20% rate
     # New Cards
     {"name": "Shield", "type": "defensive", "effect": {"type": "protect"}, "description": "Protect a character from attacks!", "cssClass": "card-defensive", "rarity": 0.2}, # 20% rate
-    {"name": "Dispel", "type": "dispel", "effect": {"type": "remove_protection"}, "description": "Remove opponent's protection!", "cssClass": "card-dispel", "rarity": 0.2} # 20% rate
+    {"name": "Dispel", "type": "dispel", "effect": {"type": "remove_protection"}, "description": "Remove opponent's protection!", "cssClass": "card-dispel", "rarity": 0.2}, # 20% rate
+    {"name": "Theif", "type": "theif", "effect": {"type": "steal_card"}, "description": "Steal cards from opponent's hand!", "cssClass": "card-theif", "rarity": 0.1} # 10% rate
 ]
 
 def generate_character_id(player_num, char_index):
@@ -89,8 +90,13 @@ def initialize_game():
 
 def draw_cards_for_player(game_state, player_id):
     player = game_state["players"][player_id]
+    
+    # Calculate how many cards can still be drawn without exceeding MAX_HAND_SIZE
     cards_to_draw = MAX_HAND_SIZE - len(player["hand"])
     
+    if cards_to_draw <= 0:
+        return game_state # Hand is already full or has more than MAX_HAND_SIZE (shouldn't happen with correct logic)
+
     # Create a weighted list of available cards based on rarity
     weighted_cards = []
     for card_template in ACTION_CARD_TEMPLATES:
@@ -114,7 +120,47 @@ def get_player_id_from_character_id(character_id):
         return "player2"
     return None
 
-def apply_card_effect(game_state, playing_player_id, card_index, target_character_id):
+def steal_cards_from_opponent(game_state, playing_player_id, selected_card_indices_from_opponent):
+    opponent_player_id = "player1" if playing_player_id == "player2" else "player2"
+    
+    player_hand = game_state["players"][playing_player_id]["hand"]
+    opponent_hand = game_state["players"][opponent_player_id]["hand"]
+
+    cards_stolen_count = 0
+    max_stealable = MAX_HAND_SIZE - len(player_hand)
+    
+    if max_stealable <= 0:
+        game_state["message"] = f"{game_state['players'][playing_player_id]['player_name']} tried to steal, but their hand is full!"
+        return game_state, 0
+
+    if not opponent_hand:
+        game_state["message"] = f"{game_state['players'][playing_player_id]['player_name']} tried to steal, but {game_state['players'][opponent_player_id]['player_name']}'s hand is empty!"
+        return game_state, 0
+
+    # Ensure selected_card_indices_from_opponent are valid and within bounds
+    # And ensure the number of selected cards does not exceed max_stealable
+    if not isinstance(selected_card_indices_from_opponent, list):
+        raise ValueError("Selected card indices must be a list.")
+    
+    if len(selected_card_indices_from_opponent) > max_stealable:
+        raise ValueError(f"Cannot steal more than {max_stealable} cards.")
+
+    # Sort indices in reverse to remove without affecting subsequent indices
+    selected_card_indices_from_opponent.sort(reverse=True)
+    
+    for idx in selected_card_indices_from_opponent:
+        if 0 <= idx < len(opponent_hand): # Basic bounds check
+            card = opponent_hand.pop(idx)
+            player_hand.append(card)
+            cards_stolen_count += 1
+        else:
+            raise ValueError(f"Invalid card index {idx} selected for stealing.")
+    
+    game_state["message"] = f"{game_state['players'][playing_player_id]['player_name']} stole {cards_stolen_count} card(s) from {game_state['players'][opponent_player_id]['player_name']}!"
+
+    return game_state, cards_stolen_count
+
+def apply_card_effect(game_state, playing_player_id, card_index, target_character_id=None, selected_card_indices_from_opponent=None):
     player = game_state["players"][playing_player_id]
     
     if card_index < 0 or card_index >= len(player["hand"]):
@@ -122,6 +168,23 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
 
     card = player["hand"][card_index]
     
+    # Handle 'theif' card type first
+    if card["type"] == "theif":
+        if selected_card_indices_from_opponent is None:
+            raise ValueError("Theif card requires selected_card_indices_from_opponent.")
+        
+        # Remove the 'Theif' card from hand immediately
+        player["hand"].pop(card_index)
+        
+        # Apply steal effect
+        game_state, stolen_count = steal_cards_from_opponent(game_state, playing_player_id, selected_card_indices_from_opponent)
+        game_state["message"] = game_state["message"] # Keep message from steal_cards_from_opponent
+        return game_state 
+
+    # For other card types, a target character is required
+    if target_character_id is None:
+        raise ValueError("Target character ID is required for this card type.")
+
     target_player_id = get_player_id_from_character_id(target_character_id)
     if not target_player_id:
         raise ValueError("Invalid target character ID.")
@@ -236,7 +299,7 @@ def check_win_condition(game_state):
         
     return win_status
 
-def get_game_state_for_player(full_game_state, player_id_for_view):
+def get_game_state_for_player(full_game_state, player_id_for_view, reveal_opponent_hand=False):
     player1_id = "player1"
     player2_id = "player2"
 
@@ -263,7 +326,11 @@ def get_game_state_for_player(full_game_state, player_id_for_view):
 
     if player_id_for_view == player1_id:
         player_view["players"][player1_id]["hand"] = full_game_state["players"][player1_id]["hand"]
+        if reveal_opponent_hand: # Reveal opponent's hand if requested (e.g., for Thief card)
+            player_view["players"][player2_id]["hand"] = full_game_state["players"][player2_id]["hand"]
     elif player_id_for_view == player2_id:
         player_view["players"][player2_id]["hand"] = full_game_state["players"][player2_id]["hand"]
+        if reveal_opponent_hand: # Reveal opponent's hand if requested (e.g., for Thief card)
+            player_view["players"][player1_id]["hand"] = full_game_state["players"][player1_id]["hand"]
 
     return player_view

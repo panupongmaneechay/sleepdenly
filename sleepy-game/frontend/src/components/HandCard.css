@@ -144,3 +144,23 @@ body.dark-mode .hand-card.card-dispel {
 body.dark-mode .hand-card.card-dispel .card-effect {
   color: #4dd0e1;
 }
+
+/* New: Theif Card Style */
+.hand-card.card-theif {
+  border-color: #8b4513; /* SaddleBrown border */
+  background-color: #f5deb3; /* Wheat background */
+  color: #4a2d0d; /* Dark brown text */
+  box-shadow: 0 0 10px rgba(139, 69, 19, 0.5); /* Brown glow */
+}
+body.dark-mode .hand-card.card-theif {
+  border-color: #d2b48c; /* Tan */
+  background-color: #5c3b2e; /* Darker brown */
+  color: #f0e68c; /* Khaki text */
+  box-shadow: 0 0 10px rgba(210, 180, 140, 0.7);
+}
+.hand-card.card-theif .card-effect {
+  color: #8b4513;
+}
+body.dark-mode .hand-card.card-theif .card-effect {
+  color: #d2b48c;
+}

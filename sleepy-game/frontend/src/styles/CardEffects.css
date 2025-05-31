@@ -69,3 +69,13 @@ body.dark-mode .effect-lucky {
     color: #FFFF00;
     text-shadow: 0 0 10px rgba(255, 255, 0, 0.9);
 }
+
+/* New: Theif Card Effect Style */
+.effect-theif {
+    color: #8b4513; /* SaddleBrown for theif */
+    text-shadow: 0 0 5px rgba(139, 69, 19, 0.7);
+}
+body.dark-mode .effect-theif {
+    color: #d2b48c; /* Tan */
+    text-shadow: 0 0 5px rgba(210, 180, 140, 0.7);
+}

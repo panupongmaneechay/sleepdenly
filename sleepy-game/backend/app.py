@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_cors import CORS
 import random
-from game_logic import initialize_game, apply_card_effect, check_win_condition, get_game_state_for_player, end_turn
+from game_logic import initialize_game, apply_card_effect, check_win_condition, get_game_state_for_player, end_turn, MAX_HAND_SIZE
 from bot_ai import make_bot_move
 
 app = Flask(__name__)
@@ -29,10 +29,13 @@ def api_apply_card():
     game_state = data['gameState']
     player_id = data['playerId']
     card_index = data['cardIndex']
-    target_character_id = data['targetCharacterId']
-
+    target_character_id = data.get('targetCharacterId') 
+    
+    # New: For Thief card, get selected card indices from opponent
+    selected_card_indices_from_opponent = data.get('selectedCardIndicesFromOpponent')
+    
     try:
-        new_game_state = apply_card_effect(game_state, player_id, card_index, target_character_id)
+        new_game_state = apply_card_effect(game_state, player_id, card_index, target_character_id, selected_card_indices_from_opponent)
         win_status = check_win_condition(new_game_state)
         return jsonify({'gameState': new_game_state, 'winStatus': win_status, 'message': new_game_state['message']})
     except ValueError as e:
@@ -60,6 +63,17 @@ def api_bot_move():
     win_status = check_win_condition(updated_game_state)
     
     return jsonify({'gameState': updated_game_state, 'winStatus': win_status, 'message': updated_game_state['message']})
+
+# New API endpoint for Thief card to reveal opponent's hand temporarily
+@app.route('/game/reveal_opponent_hand', methods=['POST'])
+def api_reveal_opponent_hand():
+    data = request.json
+    game_state = data['gameState']
+    player_id_requesting = data['playerId']
+
+    # Get the opponent's full hand for the requesting player
+    revealed_game_state = get_game_state_for_player(game_state, player_id_requesting, reveal_opponent_hand=True)
+    return jsonify({'gameState': revealed_game_state, 'message': 'Opponent hand revealed for stealing.'})
 
 
 # --- WebSocket Events (for Multiplayer) ---
@@ -108,9 +122,10 @@ def join_game_room(data):
         
         emit('room_joined', {'room_id': room_id, 'player_id': 'player2'}, room=request.sid)
         
+        # Send initial game state, revealing opponent's hand if it's a Thief interaction
         emit('game_start', {
-            'player1_game_state': get_game_state_for_player(initial_game_state, 'player1'),
-            'player2_game_state': get_game_state_for_player(initial_game_state, 'player2'),
+            'player1_game_state': get_game_state_for_player(initial_game_state, 'player1', reveal_opponent_hand=False),
+            'player2_game_state': get_game_state_for_player(initial_game_state, 'player2', reveal_opponent_hand=False),
             'current_turn': game_rooms[room_id]['turn']
         }, room=room_id)
         
@@ -119,38 +134,76 @@ def join_game_room(data):
         emit('join_error', {'message': 'Room not found or full.'})
         print(f'Join failed for {request.sid} on room {room_id}')
 
-@socketio.on('play_card')
-def handle_play_card(data):
+# New: WebSocket event to request opponent's hand for Thief card
+@socketio.on('request_opponent_hand_for_thief')
+def handle_request_opponent_hand_for_thief(data):
     room_id = data['room_id']
-    player_id = data['player_id']
-    card_index = data['card_index']
-    target_character_id = data['target_character_id']
+    player_id_requesting = data['player_id'] # Player who used Thief card
 
     room_data = game_rooms.get(room_id)
     if not room_data:
         return emit('error', {'message': 'Room not found.'})
 
     current_game_state = room_data['game_state']
+
+    # Ensure it's the requesting player's turn
+    if player_id_requesting != current_game_state['current_turn']:
+        return emit('error', {'message': 'Not your turn to request opponent hand.'})
+
+    # Get opponent's hand data
+    # IMPORTANT: Only send this data to the requesting player's SID, not the whole room
+    opponent_player_id = "player1" if player_id_requesting == "player2" else "player2"
     
-    # Ensure it's the player's turn to play a card
+    # Create a simplified view of opponent's hand for the requesting player
+    # This might include just card names/types, not full details if preferred for security
+    opponent_hand_data = [
+        {"index": i, "name": card["name"], "type": card["type"], "cssClass": card["cssClass"], "description": card["description"], "effect": card["effect"]} 
+        for i, card in enumerate(current_game_state["players"][opponent_player_id]["hand"])
+    ]
+    
+    # Calculate max stealable cards for the requesting player
+    player_hand_size = len(current_game_state["players"][player_id_requesting]["hand"])
+    max_stealable = MAX_HAND_SIZE - player_hand_size
+
+    emit('opponent_hand_revealed', {
+        'opponent_hand': opponent_hand_data,
+        'max_stealable': max_stealable,
+        'message': f"Select up to {max_stealable} cards to steal."
+    }, room=request.sid)
+    print(f"Player {player_id_requesting} requested opponent hand for Thief in room {room_id}.")
+
+
+@socketio.on('play_card')
+def handle_play_card(data):
+    room_id = data['room_id']
+    player_id = data['player_id']
+    card_index = data['card_index']
+    target_character_id = data.get('target_character_id') 
+    selected_card_indices_from_opponent = data.get('selected_card_indices_from_opponent') # New param
+    
+    room_data = game_rooms.get(room_id)
+    if not room_data:
+        return emit('error', {'message': 'Room not found.'})
+
+    current_game_state = room_data['game_state']
+    
     if (player_id == 'player1' and request.sid != room_data['player1_sid']) or \
        (player_id == 'player2' and request.sid != room_data['player2_sid']) or \
-       (player_id != current_game_state['current_turn']): # Ensure it's the current player's turn
+       (player_id != current_game_state['current_turn']):
         return emit('error', {'message': 'Not your turn or invalid player to play card.'})
 
     try:
-        new_game_state = apply_card_effect(current_game_state, player_id, card_index, target_character_id)
+        # Pass new parameter to apply_card_effect
+        new_game_state = apply_card_effect(current_game_state, player_id, card_index, target_character_id, selected_card_indices_from_opponent)
         win_status = check_win_condition(new_game_state)
         
         game_rooms[room_id]['game_state'] = new_game_state # Update global state
         
-        # Do NOT switch turn here. Turn is switched by 'end_turn' event.
-
-        # Send updated game states to both players
+        # Send updated game states to both players (without revealing opponent's full hand to both by default)
         emit('game_update', {
             'player1_game_state': get_game_state_for_player(new_game_state, 'player1'),
             'player2_game_state': get_game_state_for_player(new_game_state, 'player2'),
-            'current_turn': new_game_state['current_turn'], # Still the same player's turn
+            'current_turn': new_game_state['current_turn'], 
             'win_status': win_status,
             'message': new_game_state['message']
         }, room=room_id)

@@ -1,8 +1,9 @@
 import React from 'react';
 import CharacterCard from './CharacterCard';
+import HandCard from './HandCard'; // Import HandCard
 import './PlayerZone.css';
 
-function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick, isCurrentTurn, onCardDrop, isOpponentZone, myPlayerId, currentTurnPlayerId }) {
+function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick, onCardDrop, isCurrentTurn, isOpponentZone, myPlayerId, currentTurnPlayerId, isStealingMode, opponentHand, onCardSelectedForSteal, maxStealableCards, selectedCardsToStealCount, selectedOpponentCardIndices }) {
   const zoneClass = `player-zone ${isCurrentTurn ? 'current-turn-highlight' : ''}`;
   
   return (
@@ -12,6 +13,9 @@ function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick
         <div className="player-stats">
           <p>Slept: <span className="sleep-count">{sleepCount}/3</span></p>
           <p>Cards: <span className="hand-size">{handSize}</span></p>
+          {isStealingMode && isOpponentZone && (
+            <p className="steal-info">Steal: <span className="steal-count">{selectedCardsToStealCount}/{maxStealableCards}</span></p>
+          )}
         </div>
       </div>
       <div className="character-cards-container">
@@ -21,17 +25,33 @@ function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick
             character={char} 
             onClick={onCharacterClick} 
             onCardDrop={onCardDrop}
-            // Logic for isDroppable:
-            // 1. It must be MY turn (myPlayerId === currentTurnPlayerId)
-            // 2. Character must NOT be asleep.
-            // 3. If it's an ATTACK card, it must be dropped on an OPPONENT'S character (isOpponentZone is true).
-            // 4. If it's a SUPPORT card, it can be dropped on EITHER player's character.
-            // (The canDrop logic inside CharacterCard will also check cardType for attack)
-            isDroppable={myPlayerId === currentTurnPlayerId && !char.is_asleep} 
-            targetPlayerId={char.id.includes('player1') ? 'player1' : 'player2'} // Pass the target player ID
+            isDroppable={myPlayerId === currentTurnPlayerId && !char.is_asleep && !isStealingMode} 
+            targetPlayerId={char.id.includes('player1') ? 'player1' : 'player2'} 
           />
         ))}
       </div>
+
+      {/* New: Display opponent's hand if in stealing mode and it's the opponent's zone */}
+      {isStealingMode && isOpponentZone && opponentHand && (
+        <div className="opponent-hand-for-steal">
+          <h3>Opponent's Hand:</h3>
+          <div className="player-hand"> {/* Reuse player-hand style for layout */}
+            {opponentHand.map((card, index) => (
+              <HandCard
+                key={`opponent-card-${index}-${card.name}`}
+                card={card}
+                index={index}
+                isDraggable={false} 
+                playerSourceId={isOpponentZone ? currentTurnPlayerId === 'player1' ? 'player2' : 'player1' : myPlayerId} 
+                onClick={onCardSelectedForSteal} 
+                isStealingMode={isStealingMode}
+                isOpponentCard={true}
+                isSelected={selectedOpponentCardIndices.includes(index)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

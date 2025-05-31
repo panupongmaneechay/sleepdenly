@@ -12,6 +12,9 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: 'card',
     canDrop: (item, monitor) => {
+      // Theif card cannot be dropped on a character, so it should always return false here.
+      if (item.cardType === 'theif') return false; 
+      
       if (!isDroppable || character.is_asleep) return false; 
       
       const draggedCardType = item.cardType;
@@ -52,6 +55,7 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
         icon = '⭐'; // หรือ '🌟'
         className = 'effect-lucky';
       }
+      // Note: No 'theif' effect here as it's not dropped on a character.
       
       setEffectIcon(icon);
       setEffectClass(className);
