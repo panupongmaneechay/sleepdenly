@@ -79,3 +79,28 @@ body.dark-mode .character-card.drop-target {
   border-color: #87CEEB;
   box-shadow: 0 0 15px rgba(135, 206, 235, 0.7);
 }
+
+.character-card.protected {
+  border: 3px solid #6f42c1; /* Purple border for protection */
+  box-shadow: 0 0 10px rgba(111, 66, 193, 0.5); /* Purple glow */
+}
+body.dark-mode .character-card.protected {
+  border-color: #b366ff;
+  box-shadow: 0 0 10px rgba(179, 102, 255, 0.7);
+}
+
+.protected-status {
+  background-color: #6f42c1;
+  color: white;
+  font-size: 0.75em;
+  padding: 2px 5px;
+  border-radius: 3px;
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 10;
+}
+body.dark-mode .protected-status {
+  background-color: #b366ff;
+  color: #333;
+}

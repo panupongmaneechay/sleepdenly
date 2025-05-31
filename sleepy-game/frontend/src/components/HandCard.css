@@ -110,3 +110,37 @@ body.dark-mode .hand-card.card-lucky {
 body.dark-mode .hand-card.card-lucky .card-effect {
   color: #FFFF00;
 }
+
+.hand-card.card-defensive {
+  border-color: #6f42c1; /* Purple border */
+  background-color: #e6e6fa; /* Lavender background */
+  color: #4b0082; /* Indigo text */
+}
+body.dark-mode .hand-card.card-defensive {
+  border-color: #b366ff; /* Lighter purple */
+  background-color: #3b2c55; /* Darker purple */
+  color: #d6b3ff; /* Lighter text */
+}
+.hand-card.card-defensive .card-effect {
+  color: #6f42c1;
+}
+body.dark-mode .hand-card.card-defensive .card-effect {
+  color: #b366ff;
+}
+
+.hand-card.card-dispel {
+  border-color: #00bcd4; /* Cyan border */
+  background-color: #e0f7fa; /* Light cyan background */
+  color: #006064; /* Dark cyan text */
+}
+body.dark-mode .hand-card.card-dispel {
+  border-color: #4dd0e1; /* Lighter cyan */
+  background-color: #003a3d; /* Darker cyan */
+  color: #b2ebf2; /* Lighter text */
+}
+.hand-card.card-dispel .card-effect {
+  color: #00bcd4;
+}
+body.dark-mode .hand-card.card-dispel .card-effect {
+  color: #4dd0e1;
+}

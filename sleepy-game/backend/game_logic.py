@@ -4,7 +4,7 @@ import random
 MAX_HAND_SIZE = 5
 INITIAL_CHARACTERS_PER_PLAYER = 3
 
-# Dummy data for characters and cards (replace with actual game data)
+# Dummy data for characters and cards
 CHARACTER_TEMPLATES = [
     {"name": "Rickie", "age": 4, "max_sleep": 12, "description": "Young and needs lots of sleep"},
     {"name": "Nadia", "age": 17, "max_sleep": 10, "description": "Teenager, still growing"},
@@ -14,7 +14,7 @@ CHARACTER_TEMPLATES = [
     {"name": "William", "age": 72, "max_sleep": 8, "description": "Older adult, needs good rest"}
 ]
 
-# Updated ACTION_CARD_TEMPLATES with type, cssClass, and rarity
+# Updated ACTION_CARD_TEMPLATES with new cards and their properties
 ACTION_CARD_TEMPLATES = [
     {"name": "Stay up late", "type": "attack", "effect": {"type": "reduce_sleep", "value": -2}, "description": "Reduce target's sleep", "cssClass": "card-attack", "rarity": 1.0},
     {"name": "Drink warm milk", "type": "support", "effect": {"type": "add_sleep", "value": 2}, "description": "Add sleep to target", "cssClass": "card-support", "rarity": 1.0},
@@ -22,8 +22,10 @@ ACTION_CARD_TEMPLATES = [
     {"name": "Cool room", "type": "support", "effect": {"type": "add_sleep", "value": 1}, "description": "Slightly more sleep", "cssClass": "card-support", "rarity": 1.0},
     {"name": "Avoid heavy meals", "type": "attack", "effect": {"type": "reduce_sleep", "value": -1}, "description": "Less sleep for target", "cssClass": "card-attack", "rarity": 1.0},
     {"name": "Late night movie", "type": "attack", "effect": {"type": "reduce_sleep", "value": -3}, "description": "Significantly reduce sleep", "cssClass": "card-attack", "rarity": 1.0},
-    # New Lucky Card
-    {"name": "Lucky Sleep", "type": "lucky", "effect": {"type": "force_sleep"}, "description": "Force your character to sleep instantly!", "cssClass": "card-lucky", "rarity": 0.2} # 20% rate
+    {"name": "Lucky Sleep", "type": "lucky", "effect": {"type": "force_sleep"}, "description": "Force your character to sleep instantly!", "cssClass": "card-lucky", "rarity": 0.2}, # 20% rate
+    # New Cards
+    {"name": "Shield", "type": "defensive", "effect": {"type": "protect"}, "description": "Protect a character from attacks!", "cssClass": "card-defensive", "rarity": 0.2}, # 20% rate
+    {"name": "Dispel", "type": "dispel", "effect": {"type": "remove_protection"}, "description": "Remove opponent's protection!", "cssClass": "card-dispel", "rarity": 0.2} # 20% rate
 ]
 
 def generate_character_id(player_num, char_index):
@@ -35,7 +37,7 @@ def initialize_game():
             "player1": {
                 "characters": [],
                 "hand": [],
-                "sleep_count": 0, # Number of characters put to sleep
+                "sleep_count": 0,
                 "player_name": "Player 1"
             },
             "player2": {
@@ -63,6 +65,7 @@ def initialize_game():
             "current_sleep": 0,
             "max_sleep": char_data["max_sleep"],
             "is_asleep": False,
+            "is_protected": False, # New property for protection
             "description": char_data["description"]
         })
 
@@ -75,6 +78,7 @@ def initialize_game():
             "current_sleep": 0,
             "max_sleep": char_data["max_sleep"],
             "is_asleep": False,
+            "is_protected": False, # New property for protection
             "description": char_data["description"]
         })
 
@@ -87,16 +91,18 @@ def draw_cards_for_player(game_state, player_id):
     player = game_state["players"][player_id]
     cards_to_draw = MAX_HAND_SIZE - len(player["hand"])
     
-    available_cards = []
+    # Create a weighted list of available cards based on rarity
+    weighted_cards = []
     for card_template in ACTION_CARD_TEMPLATES:
-        # Add card based on its rarity
-        for _ in range(int(card_template["rarity"] * 10)): # Multiply by 10 for better distribution
-            available_cards.append(card_template)
+        # Use rarity as weight. Multiply by a factor (e.g., 100) to get integer weights
+        weight = int(card_template["rarity"] * 100)
+        for _ in range(weight):
+            weighted_cards.append(card_template)
 
     for _ in range(cards_to_draw):
-        if not available_cards: # Prevent error if no cards left
+        if not weighted_cards: # Prevent error if no cards left (highly unlikely with current setup)
             break
-        card_template = random.choice(available_cards)
+        card_template = random.choice(weighted_cards)
         player["hand"].append(card_template)
     
     return game_state
@@ -120,15 +126,6 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
     if not target_player_id:
         raise ValueError("Invalid target character ID.")
 
-    # Validation based on card type
-    if card["type"] == "attack" and target_player_id == playing_player_id:
-        raise ValueError("Attack cards cannot be used on your own characters.")
-    
-    # Lucky card can only be used on your own characters
-    if card["type"] == "lucky" and target_player_id != playing_player_id:
-        raise ValueError("Lucky Sleep card can only be used on your own characters.")
-
-
     target_character = None
     for char in game_state["players"][target_player_id]["characters"]:
         if char["id"] == target_character_id:
@@ -140,30 +137,67 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
 
     if target_character["is_asleep"]:
         raise ValueError("Target character is already asleep and cannot be affected.")
-    
-    # Apply effects based on card type
-    if card["type"] == "lucky":
+
+    # Apply validations and effects based on card type
+    if card["type"] == "attack":
+        if target_player_id == playing_player_id:
+            raise ValueError("Attack cards cannot be used on your own characters.")
+        if target_character["is_protected"]:
+            raise ValueError(f"{target_character['name']} is protected and cannot be attacked!")
+        
+        # Apply sleep reduction
+        target_character["current_sleep"] += card["effect"]["value"]
+        game_state["message"] = f"{target_character['name']} lost {-card['effect']['value']} hours of sleep."
+
+    elif card["type"] == "support":
+        # Support cards can only be used on your own characters
+        if target_player_id != playing_player_id:
+            raise ValueError("Support cards can only be used on your own characters.")
+        
+        # Apply sleep increase
+        target_character["current_sleep"] += card["effect"]["value"]
+        game_state["message"] = f"{target_character['name']} gained {card['effect']['value']} hours of sleep."
+
+    elif card["type"] == "lucky":
+        # Lucky card can only be used on your own characters
+        if target_player_id != playing_player_id:
+            raise ValueError("Lucky Sleep card can only be used on your own characters.")
+        
         target_character["current_sleep"] = target_character["max_sleep"] # Force to max sleep
         game_state["message"] = f"{target_character['name']} got a Lucky Sleep and is now asleep instantly!"
-    else: # Attack or Support cards
-        effect_type = card["effect"]["type"]
-        effect_value = card["effect"]["value"]
 
-        if effect_type == "add_sleep":
-            target_character["current_sleep"] += effect_value
-            game_state["message"] = f"{target_character['name']} gained {effect_value} hours of sleep."
-        elif effect_type == "reduce_sleep":
-            target_character["current_sleep"] += effect_value # Subtracting a negative value adds it back
-            game_state["message"] = f"{target_character['name']} lost {-effect_value} hours of sleep."
+    elif card["type"] == "defensive":
+        # Defensive card can only be used on your own characters
+        if target_player_id != playing_player_id:
+            raise ValueError("Shield card can only be used on your own characters.")
+        if target_character["is_protected"]:
+            raise ValueError(f"{target_character['name']} is already protected.")
         
-        target_character["current_sleep"] = max(target_character["current_sleep"], -10) # Ensure sleep hours don't go below -10
+        target_character["is_protected"] = True
+        game_state["message"] = f"{target_character['name']} is now protected from attacks!"
+
+    elif card["type"] == "dispel":
+        # Dispel card can only be used on opponent characters
+        if target_player_id == playing_player_id:
+            raise ValueError("Dispel card can only be used on opponent characters.")
+        if not target_character["is_protected"]:
+            raise ValueError(f"{target_character['name']} is not protected.")
+        
+        target_character["is_protected"] = False
+        game_state["message"] = f"{target_character['name']}'s protection has been dispelled!"
     
-    # Check if character is now asleep (after applying effect)
+    else:
+        raise ValueError("Unknown card type.")
+
+    # Ensure sleep hours don't go below -10 (for attack/support cards)
+    target_character["current_sleep"] = max(target_character["current_sleep"], -10)
+    
+    # Check if character is now asleep (after applying effect, if applicable)
     if target_character["current_sleep"] >= target_character["max_sleep"] and not target_character["is_asleep"]:
         target_character["is_asleep"] = True
         game_state["players"][target_player_id]["sleep_count"] += 1
-        # Update message if character just fell asleep and it wasn't a lucky card
-        if card["type"] != "lucky":
+        # Update message if character just fell asleep and it wasn't a lucky card (which already set message)
+        if card["type"] not in ["lucky", "defensive", "dispel"]: # Don't override specific card messages
             game_state["message"] = f"{target_character['name']} reached enough sleep and is now asleep!"
     
     # Remove card from hand AFTER successful application
@@ -180,7 +214,7 @@ def end_turn(game_state, player_id):
 
     # Switch turn
     game_state["current_turn"] = "player2" if player_id == "player1" else "player1"
-    game_state["message"] = f"Player {player_id} ended their turn. It's {game_state['current_turn']}'s turn."
+    game_state["message"] = f"Player {game_state['players'][player_id]['player_name']} ended their turn. It's {game_state['players'][game_state['current_turn']]['player_name']}'s turn."
     return game_state
 
 
