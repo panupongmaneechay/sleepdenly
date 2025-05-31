@@ -1,0 +1,71 @@
+/* Card Effects Animations */
+
+.card-effect-animation {
+    position: absolute;
+    font-size: 2em; /* Large icon size */
+    font-weight: bold;
+    pointer-events: none; /* Make it unclickable */
+    animation: fadeOutAndFloat 1s forwards; /* Animation name, duration, fill-mode */
+    z-index: 20; /* Ensure it's above other elements */
+    transform: translate(-50%, -50%); /* Center the element */
+    left: 50%;
+    top: 50%;
+}
+
+/* Common animation for effects (fade out and float up) */
+@keyframes fadeOutAndFloat {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, 0%); /* Start slightly lower */
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -100%); /* Float up and fade out */
+    }
+}
+
+/* Specific styling for each effect type (color/shadow) */
+.effect-zzz {
+    color: #28a745; /* Green for sleep/support */
+    text-shadow: 0 0 5px rgba(40, 167, 69, 0.7);
+}
+body.dark-mode .effect-zzz {
+    color: #7FFF00;
+    text-shadow: 0 0 5px rgba(127, 255, 0, 0.7);
+}
+
+.effect-attack {
+    color: #dc3545; /* Red for attack */
+    text-shadow: 0 0 5px rgba(220, 53, 69, 0.7);
+}
+body.dark-mode .effect-attack {
+    color: #ff6347;
+    text-shadow: 0 0 5px rgba(255, 99, 71, 0.7);
+}
+
+.effect-defensive {
+    color: #6f42c1; /* Purple for defensive */
+    text-shadow: 0 0 5px rgba(111, 66, 193, 0.7);
+}
+body.dark-mode .effect-defensive {
+    color: #b366ff;
+    text-shadow: 0 0 5px rgba(179, 102, 255, 0.7);
+}
+
+.effect-dispel {
+    color: #00bcd4; /* Cyan for dispel */
+    text-shadow: 0 0 5px rgba(0, 188, 212, 0.7);
+}
+body.dark-mode .effect-dispel {
+    color: #4dd0e1;
+    text-shadow: 0 0 5px rgba(77, 208, 225, 0.7);
+}
+
+.effect-lucky {
+    color: #ffc107; /* Gold/Orange for lucky */
+    text-shadow: 0 0 10px rgba(255, 193, 7, 0.9); /* Stronger glow */
+}
+body.dark-mode .effect-lucky {
+    color: #FFFF00;
+    text-shadow: 0 0 10px rgba(255, 255, 0, 0.9);
+}

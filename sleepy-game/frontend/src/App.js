@@ -10,6 +10,8 @@ import DarkModeToggle from './components/DarkModeToggle';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 
+// Import the new effect CSS
+import './styles/CardEffects.css'; // Add this line
 
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -20,7 +22,7 @@ function App() {
 
   return (
     <Router>
-      <DndProvider backend={HTML5Backend}> {/* Wrap with DndProvider */}
+      <DndProvider backend={HTML5Backend}>
         <div className={`App ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
           <DarkModeToggle isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
           <Routes>

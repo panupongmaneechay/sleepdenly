@@ -29,10 +29,10 @@ body.dark-mode .character-card {
 .character-card.asleep {
   opacity: 0.6;
   border-color: #888;
-  background-color: #f8d7da; /* Light red for asleep */
+  background-color: #0d5a0d; /* Light red for asleep */
 }
 body.dark-mode .character-card.asleep {
-  background-color: #6a0000; /* Darker red for asleep in dark mode */
+  background-color: #006a00; /* Darker red for asleep in dark mode */
 }
 
 .character-avatar {
