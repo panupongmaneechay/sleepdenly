@@ -2,22 +2,23 @@ import React from 'react';
 import { useDrag } from 'react-dnd';
 import './HandCard.css';
 
-function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceId }) { // Accept playerSourceId
+function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceId }) {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'card',
     item: { 
       cardIndex: index, 
       cardType: card.type, 
-      cardEffectValue: card.effect.value,
-      playerSourceId: playerSourceId // Pass the player ID who owns this card
+      cardEffectValue: card.effect.value, // Keep effect value for potential client-side display logic
+      playerSourceId: playerSourceId 
     },
     canDrag: isDraggable, 
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }), [index, card, isDraggable, playerSourceId]); // Add all dependencies to ensure re-render for new cards
+  }), [index, card, isDraggable, playerSourceId]);
 
-  const cardClass = `hand-card ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`;
+  // Use card.cssClass if provided, otherwise default 'card-default'
+  const cardClass = `hand-card ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''} ${card.cssClass || 'card-default'}`;
 
   return (
     <div
@@ -28,7 +29,7 @@ function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceI
     >
       <h3>{card.name}</h3>
       <p className="card-description">{card.description}</p>
-      <p className="card-effect">Effect: {card.effect.type === 'add_sleep' ? '+' : ''}{card.effect.value} hours</p>
+      <p className="card-effect">{card.effect.type === 'force_sleep' ? 'Instant Sleep!' : (card.effect.type === 'add_sleep' ? '+' : '') + card.effect.value + ' hours'}</p>
     </div>
   );
 }

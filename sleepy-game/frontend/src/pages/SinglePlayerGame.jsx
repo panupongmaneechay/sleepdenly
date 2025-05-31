@@ -49,27 +49,82 @@ function SinglePlayerGame() {
     }
   };
 
+//   const handleCardDrop = async (cardIndex, targetCharacterId, cardType, targetPlayerIdOfChar, playingPlayerId) => {
+//     // IMPORTANT: Use the updater function for setGameState to ensure latest state is sent
+//     // This is the core fix for the "reset" bug.
+//     setGameState(prevGameState => {
+//         if (!prevGameState) return null; // Should not happen if game is initialized
+
+//         if (prevGameState.current_turn !== playingPlayerId || gameOver) {
+//             setMessage("It's not your turn or game is over.");
+//             return prevGameState; // Return current state if invalid
+//         }
+
+//         if (cardType === 'attack' && targetPlayerIdOfChar === playingPlayerId) {
+//             setMessage("You cannot use attack cards on your own characters!");
+//             return prevGameState; // Return current state if invalid
+//         }
+
+//         setMessage("Playing card...");
+        
+//         // Make the API call with the PREV_GAME_STATE
+//         axios.post(`${API_BASE_URL}/game/apply_card`, {
+//             gameState: prevGameState, // Send the latest state to backend
+//             playerId: playingPlayerId,
+//             cardIndex: cardIndex,
+//             targetCharacterId: targetCharacterId,
+//         })
+//         .then(response => {
+//             if (response.data.error) {
+//                 setMessage(`Error: ${response.data.error}`);
+//             } else {
+//                 setGameState(response.data.gameState); // Update with new state from backend
+//                 if (response.data.winStatus.game_over) {
+//                     setGameOver(true);
+//                     setWinner(response.data.winStatus.winner);
+//                     setMessage(response.data.winStatus.message);
+//                 } else {
+//                     // Update message from backend
+//                     setMessage(response.data.message || "Card played successfully! You can play another or end turn.");
+//                 }
+//             }
+//         })
+//         .catch(error => {
+//             console.error("Error applying card:", error);
+//             setMessage(`Error: ${error.response?.data?.error || error.message}`);
+//         });
+
+//         // Optimistic update for hand size and message might be tricky here
+//         // For simplicity, let's just return prevGameState and let the .then() update
+//         // The display will update when setGameState is called in .then()
+//         return prevGameState; 
+//     });
+//   };
   const handleCardDrop = async (cardIndex, targetCharacterId, cardType, targetPlayerIdOfChar, playingPlayerId) => {
-    // IMPORTANT: Use the updater function for setGameState to ensure latest state is sent
-    // This is the core fix for the "reset" bug.
     setGameState(prevGameState => {
-        if (!prevGameState) return null; // Should not happen if game is initialized
+        if (!prevGameState) return null;
 
         if (prevGameState.current_turn !== playingPlayerId || gameOver) {
             setMessage("It's not your turn or game is over.");
-            return prevGameState; // Return current state if invalid
+            return prevGameState;
         }
 
+        // Client-side validation for UX:
+        // Attack cards cannot be used on self
         if (cardType === 'attack' && targetPlayerIdOfChar === playingPlayerId) {
             setMessage("You cannot use attack cards on your own characters!");
-            return prevGameState; // Return current state if invalid
+            return prevGameState;
+        }
+        // Lucky card can only be used on your own characters
+        if (cardType === 'lucky' && targetPlayerIdOfChar !== playingPlayerId) {
+            setMessage("Lucky Sleep card can only be used on your own characters!");
+            return prevGameState;
         }
 
         setMessage("Playing card...");
         
-        // Make the API call with the PREV_GAME_STATE
         axios.post(`${API_BASE_URL}/game/apply_card`, {
-            gameState: prevGameState, // Send the latest state to backend
+            gameState: prevGameState, 
             playerId: playingPlayerId,
             cardIndex: cardIndex,
             targetCharacterId: targetCharacterId,
@@ -78,13 +133,12 @@ function SinglePlayerGame() {
             if (response.data.error) {
                 setMessage(`Error: ${response.data.error}`);
             } else {
-                setGameState(response.data.gameState); // Update with new state from backend
+                setGameState(response.data.gameState); 
                 if (response.data.winStatus.game_over) {
                     setGameOver(true);
                     setWinner(response.data.winStatus.winner);
                     setMessage(response.data.winStatus.message);
                 } else {
-                    // Update message from backend
                     setMessage(response.data.message || "Card played successfully! You can play another or end turn.");
                 }
             }
@@ -94,9 +148,6 @@ function SinglePlayerGame() {
             setMessage(`Error: ${error.response?.data?.error || error.message}`);
         });
 
-        // Optimistic update for hand size and message might be tricky here
-        // For simplicity, let's just return prevGameState and let the .then() update
-        // The display will update when setGameState is called in .then()
         return prevGameState; 
     });
   };
@@ -191,6 +242,7 @@ function SinglePlayerGame() {
   const player1 = gameState.players[myPlayerId];
   const player2 = gameState.players[botPlayerId];
 
+  
   return (
     <div className="game-container">
       <div className="game-board">

@@ -1,7 +1,7 @@
 .hand-card {
-  width: 120px; /* Adjust as needed */
+  width: 120px;
   height: 150px;
-  border: 1px solid #007bff;
+  border: 1px solid #007bff; /* Default blue border */
   border-radius: 8px;
   padding: 10px;
   text-align: center;
@@ -15,7 +15,7 @@
 }
 
 body.dark-mode .hand-card {
-  background-color: #1a2b3c; /* Darker blue */
+  background-color: #1a2b3c;
   border-color: #87CEEB;
   color: #f0f0f0;
 }
@@ -26,15 +26,14 @@ body.dark-mode .hand-card {
 }
 
 .hand-card.selected {
-  border: 3px solid #ffc107; /* Highlight with yellow */
+  border: 3px solid #ffc107;
   transform: scale(1.05);
   box-shadow: 0 0 15px rgba(255, 193, 7, 0.5);
 }
 body.dark-mode .hand-card.selected {
-  border-color: #FFFF00; /* Brighter yellow */
+  border-color: #FFFF00;
   box-shadow: 0 0 15px rgba(255, 255, 0, 0.5);
 }
-
 
 .hand-card h3 {
   margin: 5px 0;
@@ -51,8 +50,63 @@ body.dark-mode .card-description {
 
 .card-effect {
   font-weight: bold;
-  color: #dc3545; /* Red for effect */
+  color: #555; /* Default effect color */
 }
 body.dark-mode .card-effect {
-  color: #ff4500; /* Orange-red */
+  color: #ddd;
+}
+
+/* New: Card Type Specific Styles */
+.hand-card.card-attack {
+  border-color: #dc3545; /* Red border */
+  background-color: #f8d7da; /* Light red background */
+  color: #721c24; /* Dark red text */
+}
+body.dark-mode .hand-card.card-attack {
+  border-color: #ff6347; /* Tomato red */
+  background-color: #4a1c1d; /* Darker red */
+  color: #ffcccc; /* Lighter red text */
+}
+.hand-card.card-attack .card-effect {
+  color: #dc3545; /* Red effect text */
+}
+body.dark-mode .hand-card.card-attack .card-effect {
+  color: #ff6347;
+}
+
+
+.hand-card.card-support {
+  border-color: #28a745; /* Green border */
+  background-color: #d4edda; /* Light green background */
+  color: #155724; /* Dark green text */
+}
+body.dark-mode .hand-card.card-support {
+  border-color: #7FFF00; /* Chartreuse */
+  background-color: #1a4f1a; /* Darker green */
+  color: #ccffcc; /* Lighter green text */
+}
+.hand-card.card-support .card-effect {
+  color: #28a745; /* Green effect text */
+}
+body.dark-mode .hand-card.card-support .card-effect {
+  color: #7FFF00;
+}
+
+.hand-card.card-lucky {
+  border-color: #ffc107; /* Orange border */
+  background-color: #fff3cd; /* Light yellow background */
+  color: #856404; /* Dark yellow text */
+  box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); /* Glowing effect for lucky cards */
+}
+body.dark-mode .hand-card.card-lucky {
+  border-color: #FFFF00; /* Brighter yellow */
+  background-color: #4d4013; /* Darker yellow */
+  color: #ffe066; /* Lighter yellow text */
+  box-shadow: 0 0 10px rgba(255, 255, 0, 0.7);
+}
+.hand-card.card-lucky .card-effect {
+  color: #856404;
+}
+body.dark-mode .hand-card.card-lucky .card-effect {
+  color: #FFFF00;
 }

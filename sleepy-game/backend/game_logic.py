@@ -14,13 +14,16 @@ CHARACTER_TEMPLATES = [
     {"name": "William", "age": 72, "max_sleep": 8, "description": "Older adult, needs good rest"}
 ]
 
+# Updated ACTION_CARD_TEMPLATES with type, cssClass, and rarity
 ACTION_CARD_TEMPLATES = [
-    {"name": "Stay up late", "type": "attack", "effect": {"type": "reduce_sleep", "value": -2}, "description": "Reduce target's sleep"},
-    {"name": "Drink warm milk", "type": "support", "effect": {"type": "add_sleep", "value": 2}, "description": "Add sleep to target"},
-    {"name": "Good income", "type": "support", "effect": {"type": "add_sleep", "value": 3}, "description": "More sleep for target"},
-    {"name": "Cool room", "type": "support", "effect": {"type": "add_sleep", "value": 1}, "description": "Slightly more sleep"},
-    {"name": "Avoid heavy meals", "type": "attack", "effect": {"type": "reduce_sleep", "value": -1}, "description": "Less sleep for target"},
-    {"name": "Late night movie", "type": "attack", "effect": {"type": "reduce_sleep", "value": -3}, "description": "Significantly reduce sleep"}
+    {"name": "Stay up late", "type": "attack", "effect": {"type": "reduce_sleep", "value": -2}, "description": "Reduce target's sleep", "cssClass": "card-attack", "rarity": 1.0},
+    {"name": "Drink warm milk", "type": "support", "effect": {"type": "add_sleep", "value": 2}, "description": "Add sleep to target", "cssClass": "card-support", "rarity": 1.0},
+    {"name": "Good income", "type": "support", "effect": {"type": "add_sleep", "value": 3}, "description": "More sleep for target", "cssClass": "card-support", "rarity": 1.0},
+    {"name": "Cool room", "type": "support", "effect": {"type": "add_sleep", "value": 1}, "description": "Slightly more sleep", "cssClass": "card-support", "rarity": 1.0},
+    {"name": "Avoid heavy meals", "type": "attack", "effect": {"type": "reduce_sleep", "value": -1}, "description": "Less sleep for target", "cssClass": "card-attack", "rarity": 1.0},
+    {"name": "Late night movie", "type": "attack", "effect": {"type": "reduce_sleep", "value": -3}, "description": "Significantly reduce sleep", "cssClass": "card-attack", "rarity": 1.0},
+    # New Lucky Card
+    {"name": "Lucky Sleep", "type": "lucky", "effect": {"type": "force_sleep"}, "description": "Force your character to sleep instantly!", "cssClass": "card-lucky", "rarity": 0.2} # 20% rate
 ]
 
 def generate_character_id(player_num, char_index):
@@ -33,16 +36,16 @@ def initialize_game():
                 "characters": [],
                 "hand": [],
                 "sleep_count": 0, # Number of characters put to sleep
-                "player_name": "Player 1" # Added for display
+                "player_name": "Player 1"
             },
             "player2": {
                 "characters": [],
                 "hand": [],
                 "sleep_count": 0,
-                "player_name": "Player 2" # Added for display
+                "player_name": "Player 2"
             }
         },
-        "current_turn": "player1", # Who's turn it is
+        "current_turn": "player1",
         "message": "Game started!",
         "game_over": False,
         "winner": None
@@ -84,8 +87,16 @@ def draw_cards_for_player(game_state, player_id):
     player = game_state["players"][player_id]
     cards_to_draw = MAX_HAND_SIZE - len(player["hand"])
     
+    available_cards = []
+    for card_template in ACTION_CARD_TEMPLATES:
+        # Add card based on its rarity
+        for _ in range(int(card_template["rarity"] * 10)): # Multiply by 10 for better distribution
+            available_cards.append(card_template)
+
     for _ in range(cards_to_draw):
-        card_template = random.choice(ACTION_CARD_TEMPLATES)
+        if not available_cards: # Prevent error if no cards left
+            break
+        card_template = random.choice(available_cards)
         player["hand"].append(card_template)
     
     return game_state
@@ -103,15 +114,20 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
     if card_index < 0 or card_index >= len(player["hand"]):
         raise ValueError("Invalid card index.")
 
-    card = player["hand"][card_index] # Keep card in hand until confirmed played
+    card = player["hand"][card_index]
     
     target_player_id = get_player_id_from_character_id(target_character_id)
     if not target_player_id:
         raise ValueError("Invalid target character ID.")
 
-    # Rule 3: Attack cards cannot be used on self
+    # Validation based on card type
     if card["type"] == "attack" and target_player_id == playing_player_id:
         raise ValueError("Attack cards cannot be used on your own characters.")
+    
+    # Lucky card can only be used on your own characters
+    if card["type"] == "lucky" and target_player_id != playing_player_id:
+        raise ValueError("Lucky Sleep card can only be used on your own characters.")
+
 
     target_character = None
     for char in game_state["players"][target_player_id]["characters"]:
@@ -125,25 +141,33 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
     if target_character["is_asleep"]:
         raise ValueError("Target character is already asleep and cannot be affected.")
     
-    effect_type = card["effect"]["type"]
-    effect_value = card["effect"]["value"]
+    # Apply effects based on card type
+    if card["type"] == "lucky":
+        target_character["current_sleep"] = target_character["max_sleep"] # Force to max sleep
+        game_state["message"] = f"{target_character['name']} got a Lucky Sleep and is now asleep instantly!"
+    else: # Attack or Support cards
+        effect_type = card["effect"]["type"]
+        effect_value = card["effect"]["value"]
 
-    if effect_type == "add_sleep":
-        target_character["current_sleep"] += effect_value
-    elif effect_type == "reduce_sleep":
-        target_character["current_sleep"] += effect_value 
+        if effect_type == "add_sleep":
+            target_character["current_sleep"] += effect_value
+            game_state["message"] = f"{target_character['name']} gained {effect_value} hours of sleep."
+        elif effect_type == "reduce_sleep":
+            target_character["current_sleep"] += effect_value # Subtracting a negative value adds it back
+            game_state["message"] = f"{target_character['name']} lost {-effect_value} hours of sleep."
+        
+        target_character["current_sleep"] = max(target_character["current_sleep"], -10) # Ensure sleep hours don't go below -10
     
-    target_character["current_sleep"] = max(target_character["current_sleep"], -10)
-    
+    # Check if character is now asleep (after applying effect)
     if target_character["current_sleep"] >= target_character["max_sleep"] and not target_character["is_asleep"]:
         target_character["is_asleep"] = True
         game_state["players"][target_player_id]["sleep_count"] += 1
-        game_state["message"] = f"{target_character['name']} is now asleep!"
+        # Update message if character just fell asleep and it wasn't a lucky card
+        if card["type"] != "lucky":
+            game_state["message"] = f"{target_character['name']} reached enough sleep and is now asleep!"
     
     # Remove card from hand AFTER successful application
     player["hand"].pop(card_index) 
-
-    # No turn switch here. Turn switch happens on 'end_turn'
 
     return game_state
 
@@ -187,13 +211,13 @@ def get_game_state_for_player(full_game_state, player_id_for_view):
             "player1": {
                 "characters": full_game_state["players"][player1_id]["characters"],
                 "sleep_count": full_game_state["players"][player1_id]["sleep_count"],
-                "hand_size": len(full_game_state["players"][player1_id]["hand"]), # Only hand size for opponent
+                "hand_size": len(full_game_state["players"][player1_id]["hand"]),
                 "player_name": full_game_state["players"][player1_id]["player_name"]
             },
             "player2": {
                 "characters": full_game_state["players"][player2_id]["characters"],
                 "sleep_count": full_game_state["players"][player2_id]["sleep_count"],
-                "hand_size": len(full_game_state["players"][player2_id]["hand"]), # Only hand size for opponent
+                "hand_size": len(full_game_state["players"][player2_id]["hand"]),
                 "player_name": full_game_state["players"][player2_id]["player_name"]
             }
         },
