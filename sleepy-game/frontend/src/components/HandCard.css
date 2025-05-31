@@ -1,0 +1,58 @@
+.hand-card {
+  width: 120px; /* Adjust as needed */
+  height: 150px;
+  border: 1px solid #007bff;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+  cursor: pointer;
+  background-color: #e0f2f7; /* Light blue */
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+}
+
+body.dark-mode .hand-card {
+  background-color: #1a2b3c; /* Darker blue */
+  border-color: #87CEEB;
+  color: #f0f0f0;
+}
+
+.hand-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.hand-card.selected {
+  border: 3px solid #ffc107; /* Highlight with yellow */
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(255, 193, 7, 0.5);
+}
+body.dark-mode .hand-card.selected {
+  border-color: #FFFF00; /* Brighter yellow */
+  box-shadow: 0 0 15px rgba(255, 255, 0, 0.5);
+}
+
+
+.hand-card h3 {
+  margin: 5px 0;
+  font-size: 1em;
+}
+
+.card-description {
+  font-size: 0.8em;
+  color: #666;
+}
+body.dark-mode .card-description {
+  color: #bbb;
+}
+
+.card-effect {
+  font-weight: bold;
+  color: #dc3545; /* Red for effect */
+}
+body.dark-mode .card-effect {
+  color: #ff4500; /* Orange-red */
+}

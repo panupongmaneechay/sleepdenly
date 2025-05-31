@@ -1,0 +1,76 @@
+.player-zone {
+  background-color: #f8f9fa; /* Light grey */
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+body.dark-mode .player-zone {
+  background-color: #2c3e50; /* Dark blue */
+  border-color: #34495e;
+  color: #ecf0f1;
+}
+
+.player-zone.current-turn-highlight {
+    border: 3px solid #28a745; /* Green highlight for current turn */
+    box-shadow: 0 0 15px rgba(40, 167, 69, 0.5);
+}
+body.dark-mode .player-zone.current-turn-highlight {
+    border-color: #7FFF00; /* Chartreuse */
+    box-shadow: 0 0 15px rgba(127, 255, 0, 0.5);
+}
+
+
+.player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed #ced4da;
+}
+body.dark-mode .player-header {
+  border-bottom-color: #495057;
+}
+
+
+.player-header h2 {
+  margin: 0;
+  font-size: 1.8em;
+  color: #333;
+}
+body.dark-mode .player-header h2 {
+  color: #f0f0f0;
+}
+
+.player-stats {
+  display: flex;
+  gap: 20px;
+  font-size: 1.1em;
+}
+
+.sleep-count {
+  font-weight: bold;
+  color: #dc3545; /* Red */
+}
+body.dark-mode .sleep-count {
+  color: #ff6347; /* Tomato red */
+}
+
+.hand-size {
+  font-weight: bold;
+  color: #007bff; /* Blue */
+}
+body.dark-mode .hand-size {
+  color: #87CEEB;
+}
+
+.character-cards-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}

@@ -1,0 +1,67 @@
+/* ... (existing styles) ... */
+
+.player-hand-container {
+  margin-top: 20px;
+  background-color: #d0d0d0;
+  padding: 15px;
+  border-radius: 8px;
+  min-height: 120px;
+  display: flex; /* Make it a flex container */
+  flex-direction: column; /* Stack items vertically */
+  align-items: center; /* Center horizontally */
+  gap: 15px; /* Space between hand and button */
+}
+
+body.dark-mode .player-hand-container {
+  background-color: #666;
+}
+
+.player-hand {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  min-height: 100px; /* Ensure hand area has enough space */
+}
+
+.end-turn-button {
+  background-color: #ff9800; /* Orange */
+  color: white;
+  padding: 12px 25px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1.1em;
+  transition: background-color 0.3s ease;
+  margin-top: 10px; /* Space from cards */
+  width: fit-content; /* Adjust width to content */
+}
+
+.end-turn-button:hover {
+  background-color: #fb8c00; /* Darker orange */
+}
+
+.end-turn-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+/* New: Styles for drag and drop */
+.character-card.drop-target {
+  border: 3px dashed #007bff; /* Blue dashed border */
+  box-shadow: 0 0 15px rgba(0, 123, 255, 0.5); /* Blue glow */
+}
+body.dark-mode .character-card.drop-target {
+  border-color: #87CEEB;
+  box-shadow: 0 0 15px rgba(135, 206, 235, 0.7);
+}
+
+/* Styling for a card when it's being dragged */
+.hand-card.dragging {
+  border: 2px dashed #666;
+  background-color: rgba(224, 242, 247, 0.7); /* Slightly transparent */
+  cursor: grabbing;
+}
+body.dark-mode .hand-card.dragging {
+    background-color: rgba(26, 43, 60, 0.7);
+}

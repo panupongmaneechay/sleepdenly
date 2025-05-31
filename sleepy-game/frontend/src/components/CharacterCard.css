@@ -1,0 +1,81 @@
+.character-card {
+  width: 150px; /* Adjust as needed */
+  height: 200px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 10px;
+  margin: 5px;
+  text-align: center;
+  cursor: pointer;
+  background-color: #fff;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+body.dark-mode .character-card {
+  background-color: #333;
+  border-color: #666;
+  color: #f0f0f0;
+}
+
+.character-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.character-card.asleep {
+  opacity: 0.6;
+  border-color: #888;
+  background-color: #f8d7da; /* Light red for asleep */
+}
+body.dark-mode .character-card.asleep {
+  background-color: #6a0000; /* Darker red for asleep in dark mode */
+}
+
+.character-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin: 0 auto 10px;
+  border: 2px solid #ddd;
+}
+body.dark-mode .character-avatar {
+  border-color: #aaa;
+}
+
+.character-info h3 {
+  margin: 5px 0;
+  font-size: 1.1em;
+}
+
+.character-info p {
+  margin: 2px 0;
+  font-size: 0.9em;
+  color: #555;
+}
+
+body.dark-mode .character-info p {
+  color: #ccc;
+}
+
+.sleep-status {
+  font-weight: bold;
+  color: #007bff;
+}
+body.dark-mode .sleep-status {
+  color: #87CEEB;
+}
+
+
+.character-card.drop-target {
+  border: 3px dashed #007bff; /* Blue dashed border */
+  box-shadow: 0 0 15px rgba(0, 123, 255, 0.5); /* Blue glow */
+}
+body.dark-mode .character-card.drop-target {
+  border-color: #87CEEB;
+  box-shadow: 0 0 15px rgba(135, 206, 235, 0.7);
+}

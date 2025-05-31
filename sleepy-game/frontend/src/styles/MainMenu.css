@@ -1,0 +1,63 @@
+.main-menu-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 80vh; /* Adjust as needed */
+  text-align: center;
+}
+
+.main-menu-container h1 {
+  font-size: 3em;
+  margin-bottom: 40px;
+  color: #333; /* Default light mode color */
+}
+
+body.dark-mode .main-menu-container h1 {
+  color: #f0f0f0; /* Dark mode color */
+}
+
+.menu-buttons button {
+  display: block;
+  width: 250px;
+  padding: 15px;
+  margin: 15px auto;
+  font-size: 1.2em;
+  border-radius: 8px;
+}
+
+.lobby-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.lobby-actions button {
+  width: 200px;
+}
+
+.join-room-section {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.join-room-section input {
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  font-size: 1em;
+  width: 150px;
+}
+
+.lobby-message {
+  margin-top: 15px;
+  font-weight: bold;
+  color: #007bff;
+}
+
+body.dark-mode .lobby-message {
+  color: #87CEEB; /* Lighter blue for dark mode */
+}
