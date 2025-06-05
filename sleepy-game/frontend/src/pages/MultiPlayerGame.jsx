@@ -422,6 +422,7 @@ function MultiPlayerGame() {
                         <>
                             <p>Do you want to use an anti-theft card?</p>
                             <div className="anti-theft-cards-options">
+                                {/* Use filtered list for display, but original index for click */}
                                 {currentPlayerHand.map((card, idx) => (
                                     card.type === 'anti_theft' && (
                                         <HandCard

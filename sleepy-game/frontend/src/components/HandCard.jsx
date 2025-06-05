@@ -2,7 +2,7 @@ import React from 'react';
 import { useDrag } from 'react-dnd';
 import './HandCard.css';
 
-function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceId, isStealingMode, isOpponentCard = false, isUnderTheftAttempt = false, thiefPlayerId = null }) {
+function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceId, isStealingMode, isOpponentCard = false, isUnderTheftAttempt = false, thiefPlayerId = null, selectedOpponentCardIndices = [] }) {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'card',
     item: { 
@@ -15,16 +15,23 @@ function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceI
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }), [index, card, isDraggable, playerSourceId, isOpponentCard, isStealingMode, isUnderTheftAttempt]);
+  }), [index, card, isDraggable, playerSourceId, isStealingMode, isUnderTheftAttempt]);
+
+  // ตรวจสอบว่าการ์ดนี้ควรถูกไฮไลต์ในโหมดขโมยหรือไม่ (เมื่อถูกเลือกแล้ว)
+  const isCurrentlySelectedForSteal = isStealingMode && isOpponentCard && selectedOpponentCardIndices.includes(index);
 
   const cardClass = `hand-card 
     ${isSelected ? 'selected' : ''} 
     ${isDragging ? 'dragging' : ''} 
     ${card.cssClass || 'card-default'}
-    ${isStealingMode && isOpponentCard ? 'stealing-target' : ''}
+    ${isCurrentlySelectedForSteal ? 'stealing-target' : ''}
     ${isOpponentCard && !isStealingMode && !isUnderTheftAttempt ? 'opponent-hidden' : ''}
     ${isUnderTheftAttempt && card.type === 'anti_theft' && playerSourceId !== thiefPlayerId ? 'anti-theft-highlight' : ''}
     `;
+
+  const isClickable = (isStealingMode && isOpponentCard) || 
+                      (isUnderTheftAttempt && !isOpponentCard && card.type === 'anti_theft' && playerSourceId !== thiefPlayerId) || 
+                      (card.type === 'theif' && isDraggable && !isStealingMode && !isUnderTheftAttempt);
 
   const handleClick = () => {
     if (isClickable) {
@@ -43,11 +50,6 @@ function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceI
     }
   };
 
-  const isClickable = (isStealingMode && isOpponentCard) || 
-                      (isUnderTheftAttempt && !isOpponentCard && card.type === 'anti_theft' && playerSourceId !== thiefPlayerId) || 
-                      (card.type === 'theif' && isDraggable && !isStealingMode && !isUnderTheftAttempt);
-
-
   const renderCardEffect = () => {
     if (card.effect && card.effect.type) {
       if (card.effect.type === 'force_sleep') return 'Instant Sleep!';
@@ -64,12 +66,9 @@ function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceI
     return ''; 
   };
 
-  // Helper to generate image path for card
   const getCardImagePath = (cardName) => {
-    // Assuming image files are in public/assets and named after card's lowercase name, hyphenated
-    // e.g., "Stay up late" -> "stay-up-late.png"
     const formattedName = cardName.toLowerCase().replace(/\s/g, '-');
-    return `/assets/action/${formattedName}.png`; // Or .jpeg if your files are JPEG
+    return `/assets/action/${formattedName}.png`; 
   };
 
   return (
@@ -79,12 +78,12 @@ function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceI
       onClick={isClickable ? handleClick : null}
       style={{ opacity: isDragging ? 0.5 : 1 }}
     >
-      <div className="card-image-container"> {/* New container for image */}
+      <div className="card-image-container">
         <img 
           src={getCardImagePath(card.name)} 
           alt={card.name} 
           className="card-icon" 
-          onError={(e) => { e.target.onerror = null; e.target.src = '/assets/default-card-icon.png'; }} // Fallback image
+          onError={(e) => { e.target.onerror = null; e.target.src = '/assets/default-card-icon.png'; }}
         />
       </div>
       <h3>{card.name}</h3>
