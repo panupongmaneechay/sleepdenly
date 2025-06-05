@@ -90,7 +90,7 @@ ACTION_CARD_TEMPLATES = [
     # New Cards
     {"name": "Shield", "type": "defensive", "effect": {"type": "protect"}, "description": "Protect a character from attacks!", "cssClass": "card-defensive", "rarity": 0.2},
     {"name": "Dispel", "type": "dispel", "effect": {"type": "remove_protection"}, "description": "Remove opponent's protection!", "cssClass": "card-dispel", "rarity": 0.2},
-    {"name": "Theif", "type": "theif", "effect": {"type": "steal_card"}, "description": "Steal cards from opponent's hand!", "cssClass": "card-theif", "rarity": 10.1},
+    {"name": "Theif", "type": "theif", "effect": {"type": "steal_card"}, "description": "Steal cards from opponent's hand!", "cssClass": "card-theif", "rarity": 0.1},
     {"name": "Dodge", "type": "anti_theft", "effect": {"type": "counter_theft"}, "description": "Counter an opponent's theft attempt!", "cssClass": "card-anti-theft", "rarity": 0.1}
 ]
 

@@ -4,13 +4,12 @@ from game_logic import apply_card_effect, check_win_condition, end_turn, MAX_HAN
 def make_bot_move(game_state):
     bot_player_id = "player2"
     
-    # If bot is targeted by theft, it will not use anti-theft for now.
-    # It just waits for the human player to confirm/cancel.
-    # The human player's action (confirmSteal/cancelSteal) will resolve theft_in_progress.
+    # Anti Theft Card
+    # รอโดนขโมยการ์ด
     if game_state["theft_in_progress"] and game_state["theft_in_progress"]["target_player_id"] == bot_player_id:
         print("Bot is targeted by theft, awaiting player's response.")
         return game_state 
-
+    # Check ว่าใช่ Turn ของ Bot ไหม
     if game_state["current_turn"] != bot_player_id:
         return game_state
 
@@ -19,59 +18,55 @@ def make_bot_move(game_state):
     player1_characters = current_game_state["players"]["player1"]["characters"]
     player2_characters = current_game_state["players"][bot_player_id]["characters"]
     
-    # Loop until no strategic moves found or hand is empty
+    # วนการ์ดในมือ เพื่อใช้ โดยจะไม่ใช้ การ์ด anti_theft เพราะใช้ไม่ได้
     while True:
         best_move_found = False
-        
-        # Filter out anti_theft cards from main play logic (bot won't use them automatically)
         playable_hand = [card for card in bot_hand if card["type"] != "anti_theft"] 
         
-        if not playable_hand: # If only Anti-Theft cards or no cards left, break
+        if not playable_hand: 
             break
-
-        # Priority 0: Play Thief card if advantageous (simplified AI for Thief)
+        # Theif Card
+        # ใช้การ์ด theif ถ้าในมือคู่ต่อสู้มีมากกว่า 0 ใบ
         theif_card_index = -1
-        for idx, card in enumerate(bot_hand): # Search in full bot_hand to find Thief card
+        for idx, card in enumerate(bot_hand): 
             if card["type"] == "theif":
                 theif_card_index = idx
                 break
-
-        # Simple AI for Thief: if opponent has more than 1 card, and bot has less than max hand size, use Thief.
+        #พิจารณาใช้การ์ดขโมย หากมีช่องว่างในมือ
         player1_hand_size = len(current_game_state["players"]["player1"]["hand"])
         if theif_card_index != -1 and player1_hand_size > 0 and len(bot_hand) < MAX_HAND_SIZE:
             try:
-                # Bot will automatically select cards to steal (simplified: steal up to MAX_HAND_SIZE - bot's current hand size)
-                num_to_steal = min(player1_hand_size, MAX_HAND_SIZE - len(bot_hand))
-                
-                # Ensure num_to_steal doesn't exceed opponent's actual hand size
+                #ถ้าคู่ต่อสู้มี 3 ใบ และบอทมี 4 ใบ (ช่องว่าง 1 ใบ) min(3, 5-4) = min(3, 1) = 1 -> ขโมย 1 ใบ
+                num_to_steal = min(player1_hand_size, MAX_HAND_SIZE - len(bot_hand))    
+                #ยืนยันอีกครั้งว่าจำนวนการ์ดที่จะขโมยจริง ๆ (actual_num_to_steal) จะต้องไม่เกินจำนวนการ์ดในมือของคู่ต่อสู้ (player1_hand_size)
                 actual_num_to_steal = min(num_to_steal, player1_hand_size)
 
+                #สร้างลิสต์ว่างสำหรับเก็บดัชนีของการ์ดที่บอทจะเลือกขโมย
                 selected_card_indices_for_thief = []
                 if actual_num_to_steal > 0:
                     selected_card_indices_for_thief = random.sample(range(player1_hand_size), actual_num_to_steal)
                 
-                # IMPORTANT: For AI, calling apply_card_effect with selected_card_indices_from_opponent
-                # means the steal is performed immediately (no intermediate 'theft_in_progress' state for AI's own theft).
+                # ใช้ฟังก์ชั่นจัดการการ์ดและผลกระทบของการ์ดนั้นต่อสถานะของเกมส์
                 current_game_state = apply_card_effect(
                     current_game_state,
                     bot_player_id,
                     theif_card_index,
-                    selected_card_indices_from_opponent=selected_card_indices_for_thief # Pass selected indices for immediate steal
+                    selected_card_indices_from_opponent=selected_card_indices_for_thief 
                 )
-                bot_hand = list(current_game_state["players"][bot_player_id]["hand"]) # Re-fetch updated hand
+                #ดึงสถานะล่าสุดหลังขโมยการ์ดคู่ต่อสู้มา
+                bot_hand = list(current_game_state["players"][bot_player_id]["hand"]) 
+                # Set เป็น True ให้เล่นต่อหลังขโมยการ์ดมาได้
                 best_move_found = True
                 print(f"Bot plays Thief and stole {actual_num_to_steal} cards! Bot's new hand size: {len(bot_hand)}")
             except ValueError as e:
                 print(f"Bot failed to play Thief card: {e}")
-                pass # Continue if Thief fails
+                pass 
             if best_move_found:
-                continue # Try to find another move after playing Thief
+                continue 
 
-        # ... (rest of bot's strategies for other cards) ...
-        # Ensure 'playable_hand' is used for iterations and then map back to 'bot_hand' index if needed.
-        # This part should be fine if you ensure 'original_index = bot_hand.index(card)' is correct.
-
-        # Strategy 0b: Use Lucky Card on self if available and beneficial (character not asleep, not protected)
+  
+        # Lucky Card
+        # วนหาการ์ด Lucky
         lucky_card_index = -1
         for idx, card in enumerate(playable_hand):
             if card["type"] == "lucky":
@@ -79,7 +74,7 @@ def make_bot_move(game_state):
                     original_index = bot_hand.index(card)
                     lucky_card_index = original_index
                     break
-        
+        # ถ้ามีการ์ด Lucky ซึ่งไม่ใช่ == -1 และจะใช้การ์ดกับตัวละครที่ไม่ถูกป้องกัน ยังต้องการชั่วโมงนอน และ ยังไม่หลับ 
         if lucky_card_index != -1:
             target_chars = [c for c in player2_characters if not c["is_asleep"] and not c["is_protected"] and c["current_sleep"] < c["max_sleep"]]
             if target_chars:
@@ -94,7 +89,8 @@ def make_bot_move(game_state):
             if best_move_found:
                 continue
 
-        # Strategy 0c: Use Dispel card on opponent if they have protected characters
+        # Dispel Card
+        # พิจารณาใช้ Dispel Card
         dispel_card_index = -1
         for idx, card in enumerate(playable_hand):
             if card["type"] == "dispel":
@@ -102,7 +98,7 @@ def make_bot_move(game_state):
                     original_index = bot_hand.index(card)
                     dispel_card_index = original_index
                     break
-
+        # จะใช้ก็ต่อเมื่อตรวจเจอว่าฝ่ายตรงข้าม กำลังถูก Protected อยู่
         if not best_move_found and dispel_card_index != -1:
             protected_opponent_chars = [c for c in player1_characters if c["is_protected"]]
             if protected_opponent_chars:
@@ -117,7 +113,8 @@ def make_bot_move(game_state):
             if best_move_found:
                 continue
 
-        # Strategy 0d: Use Defensive card on self if an important character is NOT protected and vulnerable
+        # Defensive Card
+        # พิจารณาใช้ Defensive Card
         defensive_card_index = -1
         for idx, card in enumerate(playable_hand):
             if card["type"] == "defensive":
@@ -126,6 +123,7 @@ def make_bot_move(game_state):
                     defensive_card_index = original_index
                     break
 
+        # ใช้การ์ดกับ การ์ดที่ยังไม่หลับและไม่ถูก Protected
         if not best_move_found and defensive_card_index != -1:
             vulnerable_chars = sorted([c for c in player2_characters if not c["is_asleep"] and not c["is_protected"]], 
                                     key=lambda x: x["current_sleep"])
@@ -140,15 +138,18 @@ def make_bot_move(game_state):
                     pass
             if best_move_found:
                 continue
-
-        # Strategy 1: Put opponent's character to sleep (most impactful)
+        # Attack Card
+        # ใช้การ์ดโจมตี ติดลบมากที่สุด เช่นมุ่งโจมตี หนึ่งคน ให้มีคะแนน ติดลบมากที่สุด
         if not best_move_found:
+            # วนหาการ์ดโจมตี
             for card_index_playable, card in enumerate(playable_hand):
                 if card["type"] == "attack":
                     if card in bot_hand:
                         original_index = bot_hand.index(card)
                         for char in player1_characters:
+                            # โจมตีการ์ดที่ยังไม่หลับ และ ไม่ถูก Protected
                             if not char["is_asleep"] and not char["is_protected"]:
+                                # เช็คว่าคือการลดชั่วโมงการนอน
                                 if card["effect"]["type"] == "reduce_sleep":
                                     simulated_sleep = char["current_sleep"] + card["effect"]["value"]
                                     if simulated_sleep >= char["max_sleep"]:
@@ -165,7 +166,7 @@ def make_bot_move(game_state):
             if best_move_found:
                 continue
 
-        # Strategy 2: Reduce opponent's character sleep
+        # Attack Card ตัวละครที่ใกล้จะหลับมากที่สุด
         if not best_move_found:
             for card_index_playable, card in enumerate(playable_hand):
                 if card["type"] == "attack":
@@ -187,7 +188,8 @@ def make_bot_move(game_state):
             if best_move_found:
                 continue
             
-        # Strategy 3: Increase bot's own character sleep (defensive)
+        # Support Card
+        # ทำให้ตัวละครที่ใกล้หลับมากที่สุดได้หลับก่อน
         if not best_move_found:
             for card_index_playable, card in enumerate(playable_hand):
                 if card["type"] == "support":
@@ -209,11 +211,11 @@ def make_bot_move(game_state):
             if best_move_found:
                 continue
 
-        # If no strategic moves found or hand is empty, break the loop
+        #ออกจาก Loop
         if not best_move_found or not bot_hand: 
             break
     
-    # After attempting all moves, the bot ends its turn
+    # End Turn
     try:
         final_game_state = end_turn(current_game_state, bot_player_id)
         print("Bot ended its turn.")
