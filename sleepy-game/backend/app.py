@@ -37,7 +37,8 @@ def api_apply_card():
     try:
         new_game_state = apply_card_effect(game_state, player_id, card_index, target_character_id, selected_card_indices_from_opponent, is_countering_theft, is_theft_cancellation)
         win_status = check_win_condition(new_game_state)
-        return jsonify({'gameState': new_game_state, 'winStatus': win_status, 'message': new_game_state['message']})
+        # ส่ง action_log กลับไปด้วย
+        return jsonify({'gameState': new_game_state, 'winStatus': win_status, 'message': new_game_state['message'], 'action_log': new_game_state['action_log']})
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
 
@@ -50,7 +51,8 @@ def api_end_turn():
     try:
         updated_game_state = end_turn(game_state, player_id)
         win_status = check_win_condition(updated_game_state)
-        return jsonify({'gameState': updated_game_state, 'winStatus': win_status, 'message': updated_game_state['message']})
+        # ส่ง action_log กลับไปด้วย
+        return jsonify({'gameState': updated_game_state, 'winStatus': win_status, 'message': updated_game_state['message'], 'action_log': updated_game_state['action_log']})
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
 
@@ -62,7 +64,8 @@ def api_bot_move():
     updated_game_state = make_bot_move(game_state)
     win_status = check_win_condition(updated_game_state)
     
-    return jsonify({'gameState': updated_game_state, 'winStatus': win_status, 'message': updated_game_state['message']})
+    # ส่ง action_log กลับไปด้วย
+    return jsonify({'gameState': updated_game_state, 'winStatus': win_status, 'message': updated_game_state['message'], 'action_log': updated_game_state['action_log']})
 
 # API endpoint for Thief card to initiate the theft process (for Single Player)
 @app.route('/game/theft_attempt_initiate', methods=['POST'])
@@ -83,7 +86,8 @@ def api_theft_attempt_initiate():
         return jsonify({
             'gameState': thief_player_game_state, 
             'message': new_game_state['message'],
-            'thiefAttemptInitiated': True
+            'thiefAttemptInitiated': True,
+            'action_log': new_game_state['action_log'] # ส่ง action_log กลับไปด้วย
         })
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
@@ -112,26 +116,11 @@ def api_respond_to_theft():
             if not current_game_state["theft_in_progress"] or current_game_state["theft_in_progress"]["target_player_id"] != target_player_id:
                 raise ValueError("No active theft attempt targeting this player.")
             
-            # If no response, the thief's action proceeds.
-            # The thief's card was already 'used' to initiate the theft (Frontend's responsibility to set this up).
-            # The theft_in_progress needs to be cleared and the steal needs to happen.
             thief_player_id_in_progress = current_game_state["theft_in_progress"]["thief_player_id"]
             thief_card_index_in_progress = current_game_state["theft_in_progress"]["thief_card_index"]
             
-            # The thief's selected cards must be determined. For single player bot thief, bot_ai does this.
-            # For single player human thief, selection comes from previous confirmSteal.
-            # This is tricky for this generic endpoint. Let's make a simplified assumption:
-            # When `no_response` is called, it means the *thief* player's original selection is lost.
-            # So, for the sake of progression, if the target says no response, the thief gets 1 random card.
-            # A more robust solution would store `selected_card_indices_for_thief` in `theft_in_progress`.
-            
-            # REVISED: Assuming `selected_card_indices_for_thief` is now in `theft_in_progress` (from `initiate_theft_attempt`)
             selected_by_thief = current_game_state["theft_in_progress"].get("selected_card_indices_for_thief", [])
             
-            # If the thief is AI, it provides selected_card_indices_from_opponent directly in its bot_move.
-            # If the thief is human, `selected_card_indices_from_opponent` is sent during `confirmSteal`.
-            # This `no_response` path implies the stolen cards are now finalized based on the thief's action.
-
             # Here, we need to apply the actual steal from the perspective of the thief.
             # The thief card was "used" but not "removed" from hand by apply_card_effect
             # during theft initiation. So, we remove it here first.
@@ -144,34 +133,26 @@ def api_respond_to_theft():
                 print(f"Warning: Thief card not found for removal for player {thief_player_id_in_progress} at index {thief_card_index_in_progress} during no_response.")
                 # Fallback: if card is already gone, proceed anyway but log.
 
-            # Apply the steal effect using the cards selected by the thief (if stored)
-            # Or if bot, bot's logic should handle this.
-            # For simplicity for single player, if bot is thief, it will have already completed its steal.
-            # If player is thief (and target is bot), and bot does "no_response", player's selection is used.
             updated_game_state, stolen_count = current_game_state, 0
             if selected_by_thief: # Only attempt steal if thief actually selected cards
                 updated_game_state, stolen_count = game_logic.steal_cards_from_opponent(current_game_state, thief_player_id_in_progress, selected_by_thief)
-                updated_game_state["message"] = f"{game_state['players'][thief_player_id_in_progress]['player_name']}'s theft was successful! {stolen_count} card(s) stolen."
+                # Message and log handled by steal_cards_from_opponent
             else:
                 updated_game_state["message"] = f"{game_state['players'][thief_player_id_in_progress]['player_name']}'s theft was successful (no cards selected)."
-
+                updated_game_state["action_log"].append(updated_game_state["message"]) # Log
+            
             updated_game_state["theft_in_progress"] = None # Reset theft state
 
-        elif response_type == 'thief_cancel': # New response type for thief cancelling
-            if not current_game_state["theft_in_progress"] or current_game_state["theft_in_progress"]["thief_player_id"] != thief_player_id:
-                raise ValueError("No active theft attempt initiated by this thief player to cancel.")
-            
-            # The thief card remains in hand and theft_in_progress is cleared.
-            # It implies the card was never truly 'played'.
-            updated_game_state = dict(current_game_state)
-            updated_game_state["theft_in_progress"] = None
-            updated_game_state["message"] = f"{game_state['players'][thief_player_id]['player_name']} cancelled the theft attempt."
-            
+        elif response_type == 'thief_cancel': # Thief wants to cancel the theft attempt
+            updated_game_state = apply_card_effect(updated_game_state, thief_player_id_in_progress, thief_card_index_in_progress, is_theft_cancellation=True)
+            # theft_in_progress is cleared by apply_card_effect
+
         else:
             raise ValueError("Invalid response type to theft.")
         
         win_status = check_win_condition(updated_game_state)
-        return jsonify({'gameState': updated_game_state, 'winStatus': win_status, 'message': updated_game_state['message']})
+        # ส่ง action_log กลับไปด้วย
+        return jsonify({'gameState': updated_game_state, 'winStatus': win_status, 'message': updated_game_state['message'], 'action_log': updated_game_state['action_log']})
 
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
@@ -226,13 +207,55 @@ def join_game_room(data):
         emit('game_start', {
             'player1_game_state': get_game_state_for_player(initial_game_state, 'player1'),
             'player2_game_state': get_game_state_for_player(initial_game_state, 'player2'),
-            'current_turn': initial_game_state['current_turn']
+            'current_turn': initial_game_state['current_turn'],
+            'action_log': initial_game_state['action_log'] # ส่ง action_log ไปด้วย
         }, room=room_id)
         
         print(f'Player {request.sid} joined room {room_id} as Player 2. Game starting.')
     else:
         emit('join_error', {'message': 'Room not found or full.'})
         print(f'Join failed for {request.sid} on room {room_id}')
+
+@socketio.on('play_card')
+def handle_play_card(data):
+    room_id = data['room_id']
+    player_id = data['player_id']
+    card_index = data['card_index']
+    target_character_id = data.get('target_character_id')
+    selected_card_indices_from_opponent = data.get('selected_card_indices_from_opponent')
+
+    room_data = game_rooms.get(room_id)
+    if not room_data:
+        return emit('error', {'message': 'Room not found.'})
+
+    current_game_state = room_data['game_state']
+
+    if player_id != current_game_state['current_turn']:
+        return emit('error', {'message': 'Not your turn to play a card.'}, room=request.sid)
+
+    try:
+        updated_game_state = apply_card_effect(current_game_state, player_id, card_index, target_character_id, selected_card_indices_from_opponent)
+        game_rooms[room_id]['game_state'] = updated_game_state
+
+        win_status = check_win_condition(updated_game_state)
+        
+        emit('game_update', {
+            'player1_game_state': get_game_state_for_player(updated_game_state, 'player1'),
+            'player2_game_state': get_game_state_for_player(updated_game_state, 'player2'),
+            'current_turn': updated_game_state['current_turn'],
+            'win_status': win_status,
+            'message': updated_game_state['message'],
+            'action_log': updated_game_state['action_log'] # ส่ง action_log ไปด้วย
+        }, room=room_id)
+
+        if win_status["game_over"]:
+            print(f"Game over in room {room_id}. Winner: {win_status['winner']}")
+        else:
+            print(f"Player {player_id} played card in room {room_id}. Message: {updated_game_state['message']}")
+
+    except ValueError as e:
+        emit('error', {'message': str(e)}, room=request.sid)
+
 
 # New: WebSocket event to initiate a theft attempt (Thief card used)
 @socketio.on('initiate_theft_attempt')
@@ -263,7 +286,8 @@ def handle_initiate_theft_attempt(data):
             'player2_game_state': get_game_state_for_player(new_game_state, 'player2'),
             'current_turn': new_game_state['current_turn'],
             'win_status': check_win_condition(new_game_state),
-            'message': new_game_state['message']
+            'message': new_game_state['message'],
+            'action_log': new_game_state['action_log'] # ส่ง action_log ไปด้วย
         }, room=room_data[f'{thief_player_id}_sid'])
 
         # Notify the target player about the theft attempt
@@ -335,21 +359,18 @@ def handle_respond_to_theft(data):
                updated_game_state["players"][thief_player_id_in_progress]["hand"][thief_card_index_in_progress]["type"] == "theif":
                 updated_game_state["players"][thief_player_id_in_progress]["hand"].pop(thief_card_index_in_progress)
             else:
-                print(f"Warning: Thief card not found at expected index {thief_card_index_in_progress} for player {thief_player_id_in_progress} during no_response.")
+                print(f"Warning: Thief card not found for removal for player {thief_player_id_in_progress} at index {thief_card_index_in_progress} during no_response.")
             
-            # Now, apply the steal effect using the selected cards from the thief (if any)
-            # For MP, this means the thief client sends these after getting 'opponent_hand_revealed'.
-            # We need to assume `theft_in_progress` also stored the selected_card_indices_for_thief
-            # OR the thief client sends a separate 'confirm_steal' event with selection.
-            # To simplify, we will assume thief client sends these selection indices in their 'play_card' event directly.
-            # So, for 'no_response', no new selection is made. Theft occurs.
+            selected_by_thief = updated_game_state["theft_in_progress"].get("selected_card_indices_for_thief", [])
             
-            # This path is executed when the TARGETED player responds with 'no_response'.
-            # The actual steal action (apply_card_effect with selectedCardIndicesFromOpponent)
-            # would have been initiated by the THIEF player's client via `play_card` event
-            # after they received `opponent_hand_revealed` and made their selection.
-            # So, this `no_response` only serves to clear `theft_in_progress` and notify.
-            updated_game_state["message"] = f"{game_state['players'][thief_player_id_in_progress]['player_name']}'s theft was successful (no counter)."
+            updated_game_state, stolen_count = updated_game_state, 0 # Initialize for consistency
+            if selected_by_thief:
+                updated_game_state, stolen_count = game_logic.steal_cards_from_opponent(updated_game_state, thief_player_id_in_progress, selected_by_thief)
+                # Message and log handled by steal_cards_from_opponent
+            else:
+                updated_game_state["message"] = f"{current_game_state['players'][thief_player_id_in_progress]['player_name']}'s theft was successful (no cards selected)."
+                updated_game_state["action_log"].append(updated_game_state["message"]) # Log
+            
             updated_game_state["theft_in_progress"] = None # Reset theft state
 
         elif response_type == 'thief_cancel': # Thief wants to cancel the theft attempt
@@ -367,7 +388,8 @@ def handle_respond_to_theft(data):
             'player2_game_state': get_game_state_for_player(updated_game_state, 'player2'),
             'current_turn': updated_game_state['current_turn'], 
             'win_status': check_win_condition(updated_game_state),
-            'message': updated_game_state['message']
+            'message': updated_game_state['message'],
+            'action_log': updated_game_state['action_log'] # ส่ง action_log ไปด้วย
         }, room=room_id)
 
         print(f"Player {target_player_id} responded to theft in room {room_id}. Result: {updated_game_state['message']}")

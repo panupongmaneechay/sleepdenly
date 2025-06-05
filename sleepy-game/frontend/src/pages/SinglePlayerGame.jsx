@@ -20,6 +20,7 @@ function SinglePlayerGame() {
   const [selectedCardsToSteal, setSelectedCardsToSteal] = useState([]);
   const [isUnderTheftAttempt, setIsUnderTheftAttempt] = useState(false); // New: Player is being stolen from
   const [thiefAttackerId, setThiefAttackerId] = useState(null); // New: ID of the player attempting theft
+  const [logEntries, setLogEntries] = useState([]); // สถานะใหม่สำหรับเก็บ Log
 
   const myPlayerId = 'player1';
   const botPlayerId = 'player2';
@@ -31,6 +32,9 @@ function SinglePlayerGame() {
   useEffect(() => {
     if (gameState) {
       setMessage(gameState.message);
+      // อัปเดต logEntries จาก gameState.action_log
+      setLogEntries(gameState.action_log || []);
+
       if (gameState.game_over) {
         setGameOver(true);
         setWinner(gameState.winner);
@@ -62,6 +66,7 @@ function SinglePlayerGame() {
       setSelectedCardsToSteal([]);
       setIsUnderTheftAttempt(false); 
       setThiefAttackerId(null); 
+      setLogEntries([]); // รีเซ็ต Log เมื่อเริ่มเกมใหม่
       setMessage("Game initialized! Your turn.");
     } catch (error) {
       console.error("Error initializing game:", error);
@@ -305,7 +310,7 @@ function SinglePlayerGame() {
             if (response.data.error) {
                 setMessage(`Error in theft response: ${response.data.error}`);
             } else {
-                setGameState(response.data.gameState);
+                setGameState(response.data.gameState); 
             }
         })
         .catch(error => {
@@ -492,6 +497,14 @@ function SinglePlayerGame() {
               <p className={gameState.current_turn === myPlayerId ? 'your-turn' : 'opponent-turn'}>
                 {message}
               </p>
+              {/* แสดง Log Entries ย้อนหลัง */}
+              <div className="action-log-display">
+                {logEntries.slice().reverse().map((log, index) => (
+                    <p key={`log-${index}`} className="log-entry">
+                        {log}
+                    </p>
+                ))}
+              </div>
               {gameOver && <h2 className="game-over-message">{winner === myPlayerId ? 'You Won!' : 'AI Won!'}</h2>}
               {gameOver && <button onClick={initializeGame} className="restart-button">Play Again</button>}
 
@@ -516,19 +529,21 @@ function SinglePlayerGame() {
                             <p>Do you want to use an anti-theft card?</p>
                             <div className="anti-theft-cards-options">
                                 {/* Use filtered list for display, but original index for click */}
-                                {player1.hand.filter(card => card.type === 'anti_theft').map((card) => (
-                                    <HandCard
-                                        key={`anti-theft-${player1.hand.indexOf(card)}-${card.name}`} 
-                                        card={card}
-                                        index={player1.hand.indexOf(card)} 
-                                        isDraggable={false}
-                                        playerSourceId={myPlayerId}
-                                        onClick={handlePlayCardAction}
-                                        isStealingMode={false}
-                                        isUnderTheftAttempt={true}
-                                        thiefPlayerId={thiefAttackerId}
-                                        isSelected={selectedCardsToSteal.includes(player1.hand.indexOf(card))}
-                                    />
+                                {player1.hand.map((card, idx) => (
+                                    card.type === 'anti_theft' && (
+                                        <HandCard
+                                            key={`anti-theft-${player1.hand.indexOf(card)}-${card.name}`} 
+                                            card={card}
+                                            index={player1.hand.indexOf(card)} 
+                                            isDraggable={false}
+                                            playerSourceId={myPlayerId}
+                                            onClick={handlePlayCardAction}
+                                            isStealingMode={false}
+                                            isUnderTheftAttempt={true}
+                                            thiefPlayerId={thiefAttackerId}
+                                            isSelected={selectedCardsToSteal.includes(player1.hand.indexOf(card))}
+                                        />
+                                    )
                                 ))}
                             </div>
                             <button onClick={() => handlePlayerBeingStolenFromResponse('no_response')}>

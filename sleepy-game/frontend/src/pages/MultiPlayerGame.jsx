@@ -26,6 +26,7 @@ function MultiPlayerGame() {
   const [maxStealableCards, setMaxStealableCards] = useState(0); 
   const [isUnderTheftAttempt, setIsUnderTheftAttempt] = useState(false);
   const [thiefAttackerId, setThiefAttackerId] = useState(null);
+  const [logEntries, setLogEntries] = useState([]); // สถานะใหม่สำหรับเก็บ Log
 
   const myPlayerId = location.state?.playerId;
   const opponentPlayerId = myPlayerId === 'player1' ? 'player2' : 'player1';
@@ -54,6 +55,7 @@ function MultiPlayerGame() {
       setSelectedCardsToSteal([]);
       setIsUnderTheftAttempt(false);
       setThiefAttackerId(null);
+      setLogEntries(initialPlayerState.action_log || []); // ดึง log จาก initial state
     });
 
     socket.on('game_update', (data) => {
@@ -68,6 +70,8 @@ function MultiPlayerGame() {
       } else {
         setMessage(data.message);
       }
+      setLogEntries(updatedPlayerState.action_log || []); // ดึง log จาก updated state
+      
       if (!data.hasOwnProperty('opponent_hand')) {
         setIsStealingMode(false); 
         setThiefCardPlayedInfo(null);
@@ -399,6 +403,14 @@ function MultiPlayerGame() {
               <p className={isMyTurn ? 'your-turn' : 'opponent-turn'}>
                 {message}
               </p>
+              {/* แสดง Log Entries ย้อนหลัง */}
+              <div className="action-log-display">
+                {logEntries.slice().reverse().map((log, index) => (
+                    <p key={`log-${index}`} className="log-entry">
+                        {log}
+                    </p>
+                ))}
+              </div>
               {gameOver && <h2 className="game-over-message">{winner === myPlayerId ? 'You Won!' : 'Opponent Won!'}</h2>}
               {gameOver && <button onClick={() => navigate('/multiplayer-lobby')} className="restart-button">Back to Lobby</button>}
 
