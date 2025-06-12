@@ -1,3 +1,4 @@
+// sleepy-game/frontend/src/pages/SinglePlayerGame.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import CharacterCard from '../components/CharacterCard';
@@ -80,15 +81,6 @@ function SinglePlayerGame() {
 
         if (prevGameState.current_turn !== playingPlayerId || gameOver || isStealingMode || isUnderTheftAttempt) {
             setMessage("Not your turn, game over, or in special action mode.");
-            return prevGameState;
-        }
-
-        if (cardType === 'attack' && targetPlayerIdOfChar === playingPlayerId) {
-            setMessage("You cannot use attack cards on your own characters!");
-            return prevGameState;
-        }
-        if (cardType === 'lucky' && targetPlayerIdOfChar !== playingPlayerId) {
-            setMessage("Lucky Sleep card can only be used on your own characters!");
             return prevGameState;
         }
 

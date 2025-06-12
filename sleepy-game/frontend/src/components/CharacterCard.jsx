@@ -12,25 +12,40 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: 'card',
     canDrop: (item, monitor) => {
-      if (item.cardType === 'theif') return false; 
+      // 'item' here contains the properties from the dragged card's `useDrag` hook
+      const { cardType, cardEffectValue, playerSourceId } = item;
+
+      if (cardType === 'theif') return false; 
       
       if (!isDroppable || character.is_asleep) return false; 
       
-      const draggedCardType = item.cardType;
-      const playingPlayerId = item.playerSourceId; 
+      const currentSleep = character.current_sleep;
+      const maxSleep = character.max_sleep;
 
-      if (draggedCardType === 'attack') {
-          if (targetPlayerId === playingPlayerId) return false;
+      if (cardType === 'attack') {
           if (character.is_protected) return false;
-      } else if (draggedCardType === 'support' || draggedCardType === 'lucky' || draggedCardType === 'defensive') {
-          if (targetPlayerId !== playingPlayerId) return false;
-          if (draggedCardType === 'defensive' && character.is_protected) return false;
-      } else if (draggedCardType === 'dispel') {
-          if (targetPlayerId === playingPlayerId) return false;
+          // Attack cards can always be dropped on non-protected, non-asleep characters.
+          // The backend will handle the exact sleep calculation and conditions for sleeping.
+          return true; 
+      } else if (cardType === 'support') {
+          // REMOVED: if (potentialSleep > maxSleep) { return false; }
+          // Allow support cards to be dropped even if they would exceed max_sleep.
+          // The backend logic (game_logic.py) will cap the sleep at max_sleep.
+          return true;
+      } else if (cardType === 'defensive') {
+          if (targetPlayerId !== playerSourceId) return false; // Defensive always on self
+          if (character.is_protected) return false;
+          return true;
+      } else if (cardType === 'dispel') {
+          if (targetPlayerId === playerSourceId) return false; // Dispel always on opponent
           if (!character.is_protected) return false;
+          return true;
+      } else if (cardType === 'lucky') {
+          if (targetPlayerId !== playerSourceId) return false; // Lucky always on self
+          return true;
       }
       
-      return true;
+      return false; // Default: cannot drop unknown card types
     },
     drop: (item, monitor) => {
       const playingPlayerId = monitor.getItem().playerSourceId; 
@@ -65,7 +80,7 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(), 
     }),
-  }), [isDroppable, character.is_asleep, character.is_protected, targetPlayerId]); 
+  }), [isDroppable, character.is_asleep, character.is_protected, character.current_sleep, character.max_sleep, targetPlayerId]); 
 
   // Effect to clear the visual effect after a delay
   useEffect(() => {
@@ -88,17 +103,18 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
 
   // Helper to generate image path for character
   const getCharacterImagePath = (name) => {
-    // Assuming image files are in public/assets and named after character's lowercase name, hyphenated
-    // e.g., "Rickie" -> "rickie.png"
     const formattedName = name.toLowerCase().replace(/\s/g, '-');
-    // You can use .jpeg if your files are JPEG: `/assets/${formattedName}.jpeg`
     console.log('=====',formattedName);
     
     return `/assets/character/${formattedName}.png`; 
   };
 
   return (
-    <div ref={drop} className={cardClass} onClick={() => onClick(character.id)}>
+    <div
+      ref={drop}
+      className={cardClass}
+      onClick={() => onClick(character.id)}
+    >
       <img 
         src={getCharacterImagePath(character.name)} 
         alt={character.name} 

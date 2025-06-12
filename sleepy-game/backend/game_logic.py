@@ -336,29 +336,27 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
     
     # Remove card from hand BEFORE applying effects to ensure index is correct
     played_card = player["hand"].pop(card_index)
+    
+    log_message = ""
 
     # Apply validations and effects based on card type
     if played_card["type"] == "attack":
-        if target_player_id == playing_player_id:
-            raise ValueError("Attack cards cannot be used on your own characters.")
         if target_character["is_protected"]:
-            # If protected, card is still consumed, but effect is nullified
             log_message = f"{player_name} used {played_card['name']} on {target_character['name']} but they are protected!" # Log
-            game_state["message"] = log_message
             game_state["action_log"].append(log_message)
+            game_state["message"] = log_message
             return game_state # Card is consumed, but no effect
         
         target_character["current_sleep"] += played_card["effect"]["value"]
+        # Allow current_sleep to go negative for attack cards
         log_message = f"{player_name} used {played_card['name']} on {target_character['name']} to reduce sleep by {-played_card['effect']['value']} hours." # Log
-        game_state["message"] = log_message
 
     elif played_card["type"] == "support":
-        if target_player_id != playing_player_id:
-            raise ValueError("Support cards can only be used on your own characters.")
-        
         target_character["current_sleep"] += played_card["effect"]["value"]
+        
+        # We no longer cap the current_sleep here. It can now exceed max_sleep.
+        # The character will only go to sleep if current_sleep is EXACTLY max_sleep.
         log_message = f"{player_name} used {played_card['name']} on {target_character['name']} to add {played_card['effect']['value']} hours of sleep." # Log
-        game_state["message"] = log_message
 
     elif played_card["type"] == "lucky":
         if target_player_id != playing_player_id:
@@ -366,7 +364,6 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
         
         target_character["current_sleep"] = target_character["max_sleep"]
         log_message = f"{player_name} used {played_card['name']} on {target_character['name']} for instant sleep!" # Log
-        game_state["message"] = log_message
 
     elif played_card["type"] == "defensive":
         if target_player_id != playing_player_id:
@@ -376,7 +373,6 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
         
         target_character["is_protected"] = True
         log_message = f"{player_name} used {played_card['name']} on {target_character['name']} for protection!" # Log
-        game_state["message"] = log_message
 
     elif played_card["type"] == "dispel":
         if target_player_id == playing_player_id:
@@ -386,20 +382,19 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
         
         target_character["is_protected"] = False
         log_message = f"{player_name} used {played_card['name']} to dispel protection from {target_character['name']}!" # Log
-        game_state["message"] = log_message
     
     else:
         raise ValueError("Unknown card type.")
 
-    target_character["current_sleep"] = max(target_character["current_sleep"], -10)
-    
-    if target_character["current_sleep"] >= target_character["max_sleep"] and not target_character["is_asleep"]:
+    # A character only goes to sleep if current_sleep is EXACTLY max_sleep
+    if target_character["current_sleep"] == target_character["max_sleep"] and not target_character["is_asleep"]:
         target_character["is_asleep"] = True
         game_state["players"][target_player_id]["sleep_count"] += 1
-        if played_card["type"] not in ["lucky", "defensive", "dispel"]: # Lucky, defensive, dispel already have specific messages
-             # Only add this if character goes to sleep as a direct result of sleep change
-            game_state["message"] += f" {target_character['name']} reached enough sleep and is now asleep!" # Log
+        # Only append 'reached enough sleep' message if it's not a specific message from lucky, defensive, dispel
+        if played_card["type"] not in ["lucky", "defensive", "dispel"]:
+            log_message += f" {target_character['name']} reached enough sleep and is now asleep!"
         
+    game_state["message"] = log_message # Set the final message
     game_state["action_log"].append(game_state["message"]) # Log the final message
     return game_state
 
