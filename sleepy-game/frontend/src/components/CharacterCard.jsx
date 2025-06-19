@@ -4,7 +4,7 @@ import { useDrop } from 'react-dnd';
 import './CharacterCard.css'; // Existing CSS
 import '../styles/CardEffects.css';
 
-function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlayerId }) {
+function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlayerId, swapInProgress }) { // Add swapInProgress prop
   // State to manage visual effects
   const [effect, setEffect] = useState(null); // e.g., { type: 'zzz', key: Date.now() }
   const [effectIcon, setEffectIcon] = useState('');
@@ -13,22 +13,26 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: 'card',
     item: { 
-      cardIndex: -1, // This component does not directly handle card index as it's a drop target
+      cardIndex: -1, 
       cardType: '',
       cardEffectValue: null, 
       playerSourceId: '' 
     },
-    // The actual item properties are received in the drop function
-    // For canDrop, we only check if it's generally droppable for ANY card (except Thief)
     canDrop: (item, monitor) => {
       // 'item' here contains the properties from the dragged card's `useDrag` hook
       const { cardType } = item;
+
+      // Cannot drop if a swap is in progress
+      if (swapInProgress) return false; // New: Prevent dropping if swap is in progress
 
       // Cannot drop if the character is asleep or if isDroppable is false
       if (!isDroppable || character.is_asleep) return false; 
       
       // Thief card does not target characters, so it cannot be dropped
       if (cardType === 'theif') return false; 
+
+      // Swap card does not target characters, so it cannot be dropped
+      if (cardType === 'swap') return false; // New: Prevent dropping swap card on character
 
       // Lucky card can only be used on the player's own characters
       if (cardType === 'lucky' && targetPlayerId !== item.playerSourceId) return false;
@@ -52,6 +56,7 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
         icon = '⭐'; 
         className = 'effect-lucky';
       }
+      // Note: Thief and Swap cards won't trigger this drop logic as canDrop is false for them
       
       setEffectIcon(icon);
       setEffectClass(className);
@@ -61,19 +66,7 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(), 
     }),
-  }), [isDroppable, character.is_asleep, targetPlayerId, onCardDrop]); 
-
-  // Effect to clear the visual effect after a delay
-  useEffect(() => {
-    if (effect) {
-      const timer = setTimeout(() => {
-        setEffect(null); // Clear the effect state
-        setEffectIcon('');
-        setEffectClass('');
-      }, 1000); // Effect visible for 1 second
-      return () => clearTimeout(timer);
-    }
-  }, [effect]);
+  }), [isDroppable, character.is_asleep, targetPlayerId, onCardDrop, swapInProgress]); // Added swapInProgress to dependencies
 
   const currentSleepDisplay = character.is_asleep ? "ASLEEP" : `${character.current_sleep}/${character.max_sleep} hours`;
   

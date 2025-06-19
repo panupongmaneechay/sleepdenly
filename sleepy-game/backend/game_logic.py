@@ -87,8 +87,8 @@ ACTION_CARD_TEMPLATES = [
     {"name": "Sick", "type": "attack", "effect": {"type": "reduce_sleep", "value": -3}, "description": "Illness severely impacts sleep quality.", "cssClass": "card-attack", "rarity": 1.0},
     {"name": "Stop_using_phone", "type": "support", "effect": {"type": "add_sleep", "value": 3}, "description": "Avoiding screens before bed improves sleep.", "cssClass": "card-support", "rarity": 1.0},
     {"name": "Lucky", "type": "lucky", "effect": {"type": "force_sleep"}, "description": "Force your character to sleep instantly!", "cssClass": "card-lucky", "rarity": 0.2},
-    # Theif card
-    {"name": "Theif", "type": "theif", "effect": {"type": "steal_cards"}, "description": "Steal all cards from your opponent's hand!", "cssClass": "card-theif", "rarity": 5.1},
+    {"name": "Theif", "type": "theif", "effect": {"type": "steal_cards"}, "description": "Steal all cards from your opponent's hand!", "cssClass": "card-theif", "rarity": 0.1}, # Reduced rarity for Thief to be less common
+    {"name": "Swap", "type": "swap", "effect": {"type": "swap_cards"}, "description": "Swap cards with your opponent!", "cssClass": "card-swap", "rarity": 10.3}, # New Swap Card
 ]
 
 def generate_character_id(player_num, char_index):
@@ -215,21 +215,74 @@ def steal_all_cards_from_opponent(game_state, playing_player_id):
     
     return game_state, stolen_count
 
-def apply_card_effect(game_state, playing_player_id, card_index, target_character_id=None):
+def apply_card_effect(game_state, playing_player_id, card_index, target_character_id=None, target_card_indices=None):
     player = game_state["players"][playing_player_id]
-    
+    opponent_player_id = "player1" if playing_player_id == "player2" else "player2"
+    opponent_hand = game_state["players"][opponent_player_id]["hand"]
+    player_name = game_state['players'][playing_player_id]['player_name']
+    opponent_name = game_state['players'][opponent_player_id]['player_name']
+
     if card_index < 0 or card_index >= len(player["hand"]):
         raise ValueError("Invalid card index.")
 
     card = player["hand"][card_index]
-    player_name = game_state['players'][playing_player_id]['player_name']
 
     # Handle playing a Thief card
     if card["type"] == "theif":
         player["hand"].pop(card_index) # Remove the thief card immediately
         game_state, stolen_count = steal_all_cards_from_opponent(game_state, playing_player_id)
-        # The message from steal_all_cards_from_opponent is already set in game_state["message"]
-        game_state["message"] = f"{player_name} used {card['name']}! {game_state['message']}" # Add user context to message
+        game_state["message"] = f"{player_name} used {card['name']}! {game_state['message']}"
+        return game_state
+    
+    # Handle playing a Swap card
+    if card["type"] == "swap":
+        player_hand_size = len(player["hand"]) -1 # Exclude the swap card itself
+        opponent_hand_size = len(opponent_hand)
+
+        num_cards_to_swap = min(player_hand_size, opponent_hand_size)
+        
+        if num_cards_to_swap == 0:
+            raise ValueError("You need at least one card (excluding the Swap card) and your opponent must have at least one card to use Swap.")
+        
+        if target_card_indices is None or len(target_card_indices) != num_cards_to_swap * 2:
+            raise ValueError(f"Invalid target card indices for Swap. Expected {num_cards_to_swap * 2} indices.")
+
+        # target_card_indices will be an array like [myCardIndex1, oppCardIndex1, myCardIndex2, oppCardIndex2, ...]
+        
+        # Extract player's chosen cards and opponent's chosen cards
+        my_chosen_indices = []
+        opp_chosen_indices = []
+        for i in range(num_cards_to_swap):
+            my_chosen_indices.append(target_card_indices[i * 2])
+            opp_chosen_indices.append(target_card_indices[i * 2 + 1])
+        
+        # Sort indices in descending order to avoid issues when popping
+        my_chosen_indices.sort(reverse=True)
+        opp_chosen_indices.sort(reverse=True)
+
+        swapped_cards_player = []
+        swapped_cards_opponent = []
+
+        # Perform the swap
+        for i in range(num_cards_to_swap):
+            my_card = player["hand"].pop(my_chosen_indices[i])
+            opponent_card = opponent_hand.pop(opp_chosen_indices[i])
+            
+            player["hand"].append(opponent_card)
+            opponent_hand.append(my_card)
+            
+            swapped_cards_player.append(my_card['name'])
+            swapped_cards_opponent.append(opponent_card['name'])
+
+        player["hand"].pop(card_index if card_index < len(player["hand"]) else card_index - num_cards_to_swap) # Remove the swap card
+
+        log_message = f"{player_name} used {card['name']} and swapped {num_cards_to_swap} card(s). " \
+                      f"{player_name} gave: {', '.join(swapped_cards_player)}. " \
+                      f"{player_name} received: {', '.join(swapped_cards_opponent)}."
+        
+        game_state["message"] = log_message
+        game_state["action_log"].append(log_message)
+        game_state["swap_in_progress"] = False # End the swap process
         return game_state
 
     # For other card types, a target character is required
@@ -348,9 +401,11 @@ def get_game_state_for_player(full_game_state, player_id_for_view):
         "current_turn": full_game_state["current_turn"],
         "message": full_game_state["message"],
         "game_over": full_game_state["game_over"],
-        "winner": full_game_state["winner"],
+        "winner": None,
         "theft_in_progress": None, # Always None as theft is instant now
-        "action_log": full_game_state["action_log"]
+        "action_log": full_game_state["action_log"],
+        "swap_in_progress": full_game_state.get("swap_in_progress", False), # Track if swap is in progress
+        "selected_cards_for_swap": full_game_state.get("selected_cards_for_swap", []) # Track selected cards for swap
     }
 
     # Only reveal hand to the player who owns it

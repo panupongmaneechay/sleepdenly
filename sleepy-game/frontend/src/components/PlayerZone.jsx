@@ -4,7 +4,7 @@ import CharacterCard from './CharacterCard';
 import HandCard from './HandCard'; // Still needed even if not showing opponent's hand explicitly
 import './PlayerZone.css';
 
-function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick, onCardDrop, isCurrentTurn, isOpponentZone, myPlayerId, currentTurnPlayerId }) {
+function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick, onCardDrop, isCurrentTurn, isOpponentZone, myPlayerId, currentTurnPlayerId, swapInProgress }) { // Add swapInProgress prop
   const zoneClass = `player-zone ${isCurrentTurn ? 'current-turn-highlight' : ''}`;
   
   return (
@@ -25,6 +25,7 @@ function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick
             onCardDrop={onCardDrop}
             isDroppable={myPlayerId === currentTurnPlayerId && !char.is_asleep} 
             targetPlayerId={char.id.includes('player1') ? 'player1' : 'player2'} 
+            swapInProgress={swapInProgress} // Pass swapInProgress
           />
         ))}
       </div>

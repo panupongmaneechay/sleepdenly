@@ -4,7 +4,6 @@ from flask_cors import CORS
 import random
 from game_logic import initialize_game, apply_card_effect, check_win_condition, get_game_state_for_player, end_turn, MAX_HAND_SIZE
 from bot_ai import make_bot_move
-
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key_here' # Change this!
 CORS(app, resources={r"/*": {"origins": "*"}}) # Allow CORS for frontend
@@ -29,10 +28,11 @@ def api_apply_card():
     game_state = data['gameState']
     player_id = data['playerId']
     card_index = data['cardIndex']
-    target_character_id = data.get('targetCharacterId') 
+    target_character_id = data.get('targetCharacterId')
+    target_card_indices = data.get('targetCardIndices') # New: for Swap card
     
     try:
-        new_game_state = apply_card_effect(game_state, player_id, card_index, target_character_id)
+        new_game_state = apply_card_effect(game_state, player_id, card_index, target_character_id, target_card_indices)
         win_status = check_win_condition(new_game_state)
         return jsonify({'gameState': new_game_state, 'winStatus': win_status, 'message': new_game_state['message'], 'action_log': new_game_state['action_log']})
     except ValueError as e:
@@ -125,6 +125,7 @@ def handle_play_card(data):
     player_id = data['player_id']
     card_index = data['card_index']
     target_character_id = data.get('target_character_id')
+    target_card_indices = data.get('target_card_indices') # New: for Swap card
 
     room_data = game_rooms.get(room_id)
     if not room_data:
@@ -136,7 +137,7 @@ def handle_play_card(data):
         return emit('error', {'message': 'Not your turn to play a card.'}, room=request.sid)
 
     try:
-        updated_game_state = apply_card_effect(current_game_state, player_id, card_index, target_character_id)
+        updated_game_state = apply_card_effect(current_game_state, player_id, card_index, target_character_id, target_card_indices)
         game_rooms[room_id]['game_state'] = updated_game_state
 
         win_status = check_win_condition(updated_game_state)
@@ -147,7 +148,9 @@ def handle_play_card(data):
             'current_turn': updated_game_state['current_turn'],
             'win_status': win_status,
             'message': updated_game_state['message'],
-            'action_log': updated_game_state['action_log'] 
+            'action_log': updated_game_state['action_log'],
+            'swap_in_progress': updated_game_state.get('swap_in_progress', False),
+            'selected_cards_for_swap': updated_game_state.get('selected_cards_for_swap', [])
         }, room=room_id)
 
         if win_status["game_over"]:
@@ -184,7 +187,9 @@ def handle_end_turn(data):
             'current_turn': updated_game_state['current_turn'],
             'win_status': win_status,
             'message': updated_game_state['message'],
-            'action_log': updated_game_state['action_log']
+            'action_log': updated_game_state['action_log'],
+            'swap_in_progress': updated_game_state.get('swap_in_progress', False),
+            'selected_cards_for_swap': updated_game_state.get('selected_cards_for_swap', [])
         }, room=room_id)
 
         if win_status["game_over"]:

@@ -41,6 +41,40 @@ def make_bot_move(game_state):
             if best_move_found:
                 continue 
 
+        # Strategy for Swap Card: If bot has enough cards and opponent has cards, try to swap
+        swap_card_index = -1
+        for idx, card in enumerate(bot_hand):
+            if card["type"] == "swap":
+                swap_card_index = idx
+                break
+        
+        if swap_card_index != -1:
+            player_hand_size = len(bot_hand) - 1 # Exclude the swap card itself
+            opponent_hand_size = len(current_game_state["players"][opponent_player_id]["hand"])
+            num_cards_to_swap = min(player_hand_size, opponent_hand_size)
+
+            if num_cards_to_swap > 0:
+                try:
+                    # Bot randomly selects its own cards to swap (excluding the swap card itself)
+                    # and randomly selects opponent's cards.
+                    my_cards_for_swap_indices = random.sample([i for i in range(len(bot_hand)) if i != swap_card_index], num_cards_to_swap)
+                    opponent_cards_for_swap_indices = random.sample(range(len(current_game_state["players"][opponent_player_id]["hand"])), num_cards_to_swap)
+                    
+                    target_card_indices = []
+                    for i in range(num_cards_to_swap):
+                        target_card_indices.append(my_cards_for_swap_indices[i])
+                        target_card_indices.append(opponent_cards_for_swap_indices[i])
+
+                    current_game_state = apply_card_effect(current_game_state, bot_player_id, swap_card_index, None, target_card_indices)
+                    bot_hand = list(current_game_state["players"][bot_player_id]["hand"]) # Update hand
+                    best_move_found = True
+                    print(f"Bot plays Swap and exchanges {num_cards_to_swap} cards with {current_game_state['players'][opponent_player_id]['player_name']}.")
+                except ValueError as e:
+                    print(f"Bot failed to play Swap card: {e}")
+                    pass # Continue to next card if this one fails
+            if best_move_found:
+                continue
+
         # Lucky Card
         lucky_card_index = -1
         for idx, card in enumerate(bot_hand):
