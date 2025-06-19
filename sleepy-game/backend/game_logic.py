@@ -1,3 +1,5 @@
+# sleepy-game/backend/game_logic.py
+
 import random
 
 # Game constants
@@ -85,6 +87,8 @@ ACTION_CARD_TEMPLATES = [
     {"name": "Sick", "type": "attack", "effect": {"type": "reduce_sleep", "value": -3}, "description": "Illness severely impacts sleep quality.", "cssClass": "card-attack", "rarity": 1.0},
     {"name": "Stop_using_phone", "type": "support", "effect": {"type": "add_sleep", "value": 3}, "description": "Avoiding screens before bed improves sleep.", "cssClass": "card-support", "rarity": 1.0},
     {"name": "Lucky", "type": "lucky", "effect": {"type": "force_sleep"}, "description": "Force your character to sleep instantly!", "cssClass": "card-lucky", "rarity": 0.2},
+    # Theif card
+    {"name": "Theif", "type": "theif", "effect": {"type": "steal_cards"}, "description": "Steal all cards from your opponent's hand!", "cssClass": "card-theif", "rarity": 5.1},
 ]
 
 def generate_character_id(player_num, char_index):
@@ -110,7 +114,7 @@ def initialize_game():
         "message": "Game started!",
         "game_over": False,
         "winner": None,
-        "theft_in_progress": None,
+        "theft_in_progress": None, # Removed theft interaction, this can be simplified or removed if not used elsewhere
         "action_log": []
     }
 
@@ -151,9 +155,12 @@ def initialize_game():
 def draw_cards_for_player(game_state, player_id):
     player = game_state["players"][player_id]
     
-    cards_to_draw = MAX_HAND_SIZE - len(player["hand"])
+    # Player only draws if their hand is less than MAX_HAND_SIZE
+    cards_to_draw = MAX_HAND_SIZE - len(player["hand"]) 
     
     if cards_to_draw <= 0:
+        game_state["message"] = f"{player['player_name']}'s hand is full. No cards drawn."
+        game_state["action_log"].append(game_state["message"])
         return game_state
 
     weighted_cards = []
@@ -177,55 +184,38 @@ def get_player_id_from_character_id(character_id):
         return "player2"
     return None
 
-def steal_cards_from_opponent(game_state, playing_player_id, selected_card_indices_from_opponent):
+def steal_all_cards_from_opponent(game_state, playing_player_id):
     opponent_player_id = "player1" if playing_player_id == "player2" else "player2"
     
     player_hand = game_state["players"][playing_player_id]["hand"]
     opponent_hand = game_state["players"][opponent_player_id]["hand"]
 
-    cards_stolen_count = 0
-    max_stealable = MAX_HAND_SIZE - len(player_hand)
-    
-    if max_stealable <= 0:
-        game_state["message"] = f"{game_state['players'][playing_player_id]['player_name']} tried to steal, but their hand is full!"
-        game_state["action_log"].append(f"{game_state['players'][playing_player_id]['player_name']} attempted to steal, but their hand was full.")
-        return game_state, 0
+    stolen_card_names = []
+    stolen_count = 0
 
     if not opponent_hand:
         game_state["message"] = f"{game_state['players'][playing_player_id]['player_name']} tried to steal, but {game_state['players'][opponent_player_id]['player_name']}'s hand is empty!"
         game_state["action_log"].append(f"{game_state['players'][playing_player_id]['player_name']} attempted to steal from {game_state['players'][opponent_player_id]['player_name']}'s empty hand.")
         return game_state, 0
 
-    if not isinstance(selected_card_indices_from_opponent, list):
-        raise ValueError("Selected card indices must be a list.")
+    # Steal all cards from the opponent
+    while opponent_hand:
+        card = opponent_hand.pop(0) # Remove from the beginning to maintain order
+        player_hand.append(card)
+        stolen_card_names.append(card['name'])
+        stolen_count += 1
     
-    if len(selected_card_indices_from_opponent) > max_stealable:
-        raise ValueError(f"Cannot steal more than {max_stealable} cards.")
-
-    # Remove duplicates and sort indices in reverse to remove without affecting subsequent indices
-    unique_selected_indices = sorted(list(set(selected_card_indices_from_opponent)), reverse=True)
-    
-    stolen_card_names = []
-    for idx in unique_selected_indices:
-        if 0 <= idx < len(opponent_hand):
-            card = opponent_hand.pop(idx)
-            player_hand.append(card)
-            cards_stolen_count += 1
-            stolen_card_names.append(card['name'])
-        else:
-            print(f"Warning: Invalid card index {idx} provided for stealing. Skipping.")
-            continue
-    
-    if cards_stolen_count > 0:
-        log_message = f"{game_state['players'][playing_player_id]['player_name']} stole {cards_stolen_count} card(s) ({', '.join(stolen_card_names)}) from {game_state['players'][opponent_player_id]['player_name']}."
+    if stolen_count > 0:
+        log_message = f"{game_state['players'][playing_player_id]['player_name']} stole {stolen_count} card(s) ({', '.join(stolen_card_names)}) from {game_state['players'][opponent_player_id]['player_name']}."
     else:
         log_message = f"{game_state['players'][playing_player_id]['player_name']} attempted to steal from {game_state['players'][opponent_player_id]['player_name']} but stole no cards."
+
     game_state["message"] = log_message
     game_state["action_log"].append(log_message)
     
-    return game_state, cards_stolen_count
+    return game_state, stolen_count
 
-def apply_card_effect(game_state, playing_player_id, card_index, target_character_id=None, selected_card_indices_from_opponent=None, is_countering_theft=False, is_theft_cancellation=False):
+def apply_card_effect(game_state, playing_player_id, card_index, target_character_id=None):
     player = game_state["players"][playing_player_id]
     
     if card_index < 0 or card_index >= len(player["hand"]):
@@ -234,65 +224,15 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
     card = player["hand"][card_index]
     player_name = game_state['players'][playing_player_id]['player_name']
 
-    if is_theft_cancellation:
-        if not game_state["theft_in_progress"] or game_state["theft_in_progress"]["thief_player_id"] != playing_player_id:
-            raise ValueError("No active theft attempt initiated by this player to cancel.")
-        
-        game_state["theft_in_progress"] = None
-        log_message = f"{player_name} cancelled the theft attempt using {card['name']}."
-        game_state["message"] = log_message
-        game_state["action_log"].append(log_message)
-        return game_state
-
-    if is_countering_theft:
-        if card["type"] != "anti_theft":
-            raise ValueError("Only anti-theft cards can be played in response to theft.")
-        
-        if not game_state["theft_in_progress"] or game_state["theft_in_progress"]["target_player_id"] != playing_player_id:
-            raise ValueError("Not currently under a theft attempt or not the target player.")
-        
-        thief_player_id = game_state["theft_in_progress"]["thief_player_id"]
-        thief_card_index_on_thief_hand = game_state["theft_in_progress"]["thief_card_index"]
-        thief_player_name = game_state['players'][thief_player_id]['player_name']
-        
-        popped_anti_theft_card = player["hand"].pop(card_index)
-        
-        thief_card_removed = False
-        if thief_card_index_on_thief_hand >= 0 and thief_card_index_on_thief_hand < len(game_state["players"][thief_player_id]["hand"]) and \
-           game_state["players"][thief_player_id]["hand"][thief_card_index_on_thief_hand]["type"] == "theif":
-            popped_thief_card = game_state["players"][thief_player_id]["hand"].pop(thief_card_index_on_thief_hand)
-            thief_card_removed = True
-            log_message = f"{player_name} used {popped_anti_theft_card['name']}! {thief_player_name}'s {popped_thief_card['name']} was destroyed. Theft attempt nullified!"
-        else:
-            log_message = f"{player_name} used {popped_anti_theft_card['name']}, but {thief_player_name}'s Thief card was already gone or invalid. Theft attempt nullified!"
-            print(f"Error: Thief card not found at expected index {thief_card_index_on_thief_hand} for player {thief_player_id}.")
-        
-        game_state["message"] = log_message
-        game_state["action_log"].append(log_message)
-        game_state["theft_in_progress"] = None
-        return game_state
-
+    # Handle playing a Thief card
     if card["type"] == "theif":
-        if selected_card_indices_from_opponent is None:
-            log_message = f"{player_name} used {card['name']}. Waiting for opponent's response..."
-            game_state["message"] = log_message
-            game_state["action_log"].append(log_message)
-            game_state["theft_in_progress"] = {
-                'thief_player_id': playing_player_id,
-                'thief_card_index': card_index,
-                'target_player_id': 'player1' if playing_player_id == 'player2' else 'player2'
-            }
-            return game_state
-        else:
-            if not game_state["theft_in_progress"] or game_state["theft_in_progress"]["thief_player_id"] != playing_player_id:
-                raise ValueError("No active theft attempt initiated by this player to confirm.")
-            
-            player["hand"].pop(card_index) 
-            
-            game_state, stolen_count = steal_cards_from_opponent(game_state, playing_player_id, selected_card_indices_from_opponent)
-            game_state["theft_in_progress"] = None
-            return game_state
+        player["hand"].pop(card_index) # Remove the thief card immediately
+        game_state, stolen_count = steal_all_cards_from_opponent(game_state, playing_player_id)
+        # The message from steal_all_cards_from_opponent is already set in game_state["message"]
+        game_state["message"] = f"{player_name} used {card['name']}! {game_state['message']}" # Add user context to message
+        return game_state
 
+    # For other card types, a target character is required
     if target_character_id is None:
         raise ValueError("Target character ID is required for this card type.")
 
@@ -310,47 +250,40 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
         raise ValueError(f"Character with ID {target_character_id} not found.")
 
     if target_character["is_asleep"]:
-        raise ValueError("Target character is already asleep and cannot be affected.")
+        raise ValueError("Target character is already asleep and cannot be affected by this card.")
     
-    played_card = player["hand"].pop(card_index)
+    # Remove the played card from hand
+    player["hand"].pop(card_index)
     
     log_message = ""
 
-    if played_card["type"] == "attack":
-        if target_character["is_protected"]:
-            log_message = f"{player_name} used {played_card['name']} on {target_character['name']} but they are protected!"
-            game_state["action_log"].append(log_message)
-            game_state["message"] = log_message
-            return game_state
-        
-        target_character["current_sleep"] += played_card["effect"]["value"]
-        log_message = f"{player_name} used {played_card['name']} on {target_character['name']} to reduce sleep by {-played_card['effect']['value']} hours."
+    if card["type"] == "attack":
+        target_character["current_sleep"] += card["effect"]["value"]
+        log_message = f"{player_name} used {card['name']} on {target_character['name']} to reduce sleep by {-card['effect']['value']} hours."
 
-    elif played_card["type"] == "support":
-        target_character["current_sleep"] += played_card["effect"]["value"]
-        log_message = f"{player_name} used {played_card['name']} on {target_character['name']} to add {played_card['effect']['value']} hours of sleep."
+    elif card["type"] == "support":
+        target_character["current_sleep"] += card["effect"]["value"]
+        log_message = f"{player_name} used {card['name']} on {target_character['name']} to add {card['effect']['value']} hours of sleep."
 
-    elif played_card["type"] == "lucky":
+    elif card["type"] == "lucky":
         if target_player_id != playing_player_id:
             raise ValueError("Lucky Sleep card can only be used on your own characters.")
         
         target_character["current_sleep"] = target_character["max_sleep"]
-        log_message = f"{player_name} used {played_card['name']} on {target_character['name']} for instant sleep!"
-
-    elif played_card["type"] == "defensive": # Defensive card is now removed
-        raise ValueError("Defensive card should have been removed.")
-
-    elif played_card["type"] == "dispel": # Dispel card is now removed
-        raise ValueError("Dispel card should have been removed.")
+        log_message = f"{player_name} used {card['name']} on {target_character['name']} for instant sleep!"
     
     else:
         raise ValueError("Unknown card type.")
+
+    # Cap current_sleep at 0 (cannot go below 0)
+    if target_character["current_sleep"] < 0:
+        target_character["current_sleep"] = 0
 
     # A character only goes to sleep if current_sleep is EXACTLY max_sleep
     if target_character["current_sleep"] == target_character["max_sleep"] and not target_character["is_asleep"]:
         target_character["is_asleep"] = True
         game_state["players"][target_player_id]["sleep_count"] += 1
-        if played_card["type"] not in ["lucky", "defensive", "dispel"]: # Defensive and Dispel are removed now
+        if card["type"] not in ["lucky"]: # Lucky already has its own message
             log_message += f" {target_character['name']} reached enough sleep and is now asleep!"
         
     game_state["message"] = log_message
@@ -361,10 +294,8 @@ def end_turn(game_state, player_id):
     if game_state["current_turn"] != player_id:
         raise ValueError("It's not your turn to end.")
     
-    if game_state["theft_in_progress"]:
-        raise ValueError("Cannot end turn during a theft attempt. Please resolve theft first.")
-
-    game_state = draw_cards_for_player(game_state, player_id)
+    # Player only draws cards if their hand size is less than MAX_HAND_SIZE
+    draw_cards_for_player(game_state, player_id)
 
     game_state["current_turn"] = "player2" if player_id == "player1" else "player1"
     player_name = game_state['players'][player_id]['player_name']
@@ -418,21 +349,11 @@ def get_game_state_for_player(full_game_state, player_id_for_view):
         "message": full_game_state["message"],
         "game_over": full_game_state["game_over"],
         "winner": full_game_state["winner"],
-        "theft_in_progress": full_game_state["theft_in_progress"],
+        "theft_in_progress": None, # Always None as theft is instant now
         "action_log": full_game_state["action_log"]
     }
 
-    if full_game_state["theft_in_progress"]:
-        thief_player_id = full_game_state["theft_in_progress"]["thief_player_id"]
-        target_player_id = full_game_state["theft_in_progress"]["target_player_id"]
-        
-        if player_id_for_view == thief_player_id:
-            opponent_of_thief_id = target_player_id
-            player_view["players"][opponent_of_thief_id]["hand"] = full_game_state["players"][opponent_of_thief_id]["hand"]
-        
-        if player_id_for_view == target_player_id:
-            player_view["players"][target_player_id]["hand"] = full_game_state["players"][target_player_id]["hand"]
-            
+    # Only reveal hand to the player who owns it
     if player_id_for_view == player1_id:
         player_view["players"][player1_id]["hand"] = full_game_state["players"][player1_id]["hand"]
     elif player_id_for_view == player2_id:

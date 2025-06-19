@@ -15,13 +15,7 @@ function SinglePlayerGame() {
   const [information, setInformation] = useState({ name: 'N/A', age: 'N/A', description: 'Click on a character for details.' });
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState(null);
-  const [isStealingMode, setIsStealingMode] = useState(false); // Player uses Thief card
-  const [thiefCardPlayedInfo, setThiefCardPlayedInfo] = useState(null); 
-  const [opponentHandRevealed, setOpponentHandRevealed] = useState([]);
-  const [selectedCardsToSteal, setSelectedCardsToSteal] = useState([]);
-  const [isUnderTheftAttempt, setIsUnderTheftAttempt] = useState(false); // New: Player is being stolen from
-  const [thiefAttackerId, setThiefAttackerId] = useState(null); // New: ID of the player attempting theft
-  const [logEntries, setLogEntries] = useState([]); // สถานะใหม่สำหรับเก็บ Log
+  const [logEntries, setLogEntries] = useState([]); // สถานะสำหรับเก็บ Log
 
   const myPlayerId = 'player1';
   const botPlayerId = 'player2';
@@ -33,27 +27,17 @@ function SinglePlayerGame() {
   useEffect(() => {
     if (gameState) {
       setMessage(gameState.message);
-      // อัปเดต logEntries จาก gameState.action_log
       setLogEntries(gameState.action_log || []);
 
       if (gameState.game_over) {
         setGameOver(true);
         setWinner(gameState.winner);
         setMessage(`${gameState.winner === myPlayerId ? 'You' : 'AI'} win!`);
-      } else if (gameState.current_turn === botPlayerId && !gameOver && !isStealingMode && !isUnderTheftAttempt) {
+      } else if (gameState.current_turn === botPlayerId && !gameOver) {
         setTimeout(handleBotMove, 1500);
       }
-
-      if (gameState.theft_in_progress && gameState.theft_in_progress.target_player_id === myPlayerId && !isUnderTheftAttempt) {
-          setIsUnderTheftAttempt(true);
-          setThiefAttackerId(gameState.theft_in_progress.thief_player_id);
-          setMessage(`ALERT: ${gameState.players[gameState.theft_in_progress.thief_player_id].player_name} is trying to steal your cards! Do you want to use an anti-theft card?`);
-      } else if (!gameState.theft_in_progress && isUnderTheftAttempt) {
-          setIsUnderTheftAttempt(false);
-          setThiefAttackerId(null);
-      }
     }
-  }, [gameState, gameOver, myPlayerId, botPlayerId, isStealingMode, isUnderTheftAttempt]);
+  }, [gameState, gameOver, myPlayerId, botPlayerId]);
 
   const initializeGame = async () => {
     try {
@@ -61,12 +45,6 @@ function SinglePlayerGame() {
       setGameState(response.data);
       setGameOver(false);
       setWinner(null);
-      setIsStealingMode(false); 
-      setThiefCardPlayedInfo(null);
-      setOpponentHandRevealed([]);
-      setSelectedCardsToSteal([]);
-      setIsUnderTheftAttempt(false); 
-      setThiefAttackerId(null); 
       setLogEntries([]); // รีเซ็ต Log เมื่อเริ่มเกมใหม่
       setMessage("Game initialized! Your turn.");
     } catch (error) {
@@ -79,9 +57,15 @@ function SinglePlayerGame() {
     setGameState(prevGameState => { 
         if (!prevGameState) return null;
 
-        if (prevGameState.current_turn !== playingPlayerId || gameOver || isStealingMode || isUnderTheftAttempt) {
-            setMessage("Not your turn, game over, or in special action mode.");
+        if (prevGameState.current_turn !== playingPlayerId || gameOver) {
+            setMessage("Not your turn or game over.");
             return prevGameState;
+        }
+        
+        // Thief card cannot be dropped on a character, it's used by clicking
+        if (cardType === 'theif') {
+          setMessage("Thief card cannot be dropped on a character. Click the card to use it.");
+          return prevGameState;
         }
 
         setMessage("Playing card...");
@@ -89,7 +73,7 @@ function SinglePlayerGame() {
             gameState: prevGameState, 
             playerId: playingPlayerId,
             cardIndex: cardIndex,
-            targetCharacterId: targetCharacterId,
+            targetCharacterId: targetCharacterId, // Pass targetCharacterId for regular cards
         })
         .then(response => {
             if (response.data.error) {
@@ -114,201 +98,46 @@ function SinglePlayerGame() {
     });
   };
 
-  const handlePlayCardAction = async (cardIndex, cardType, targetCharacterId = null, isCounteringTheft = false) => {
+  const handlePlayCardAction = async (cardIndex, cardType) => {
     setGameState(prevGameState => { 
         if (!prevGameState) return null;
 
-        if (isCounteringTheft) {
-            setMessage("Using anti-theft card...");
-            axios.post(`${API_BASE_URL}/game/respond_to_theft`, {
-                gameState: prevGameState,
-                targetPlayerId: myPlayerId,
-                responseType: 'use_anti_theft',
-                antiTheftCardIndex: cardIndex,
-                thiefPlayerId: prevGameState.theft_in_progress ? prevGameState.theft_in_progress.thief_player_id : null,
-                thiefCardIndex: prevGameState.theft_in_progress ? prevGameState.theft_in_progress.thief_card_index : null,
-            })
-            .then(response => {
-                if (response.data.error) {
-                    setMessage(`Error: ${response.data.error}`);
-                } else {
-                    setGameState(response.data.gameState); 
-                }
-            })
-            .catch(error => {
-                console.error("Error countering theft:", error);
-                setMessage(`Error countering theft: ${error.response?.data?.error || error.message}`);
-            });
-            return prevGameState;
-        }
-
-        if (prevGameState.current_turn !== myPlayerId || gameOver || isStealingMode || isUnderTheftAttempt) {
-            setMessage("Not your turn, game over, or in special action mode.");
+        if (prevGameState.current_turn !== myPlayerId || gameOver) {
+            setMessage("Not your turn or game over.");
             return prevGameState;
         }
 
         if (cardType === 'theif') {
-            setMessage("Initiating theft attempt...");
-            axios.post(`${API_BASE_URL}/game/theft_attempt_initiate`, {
+            setMessage("Using Thief card...");
+            axios.post(`${API_BASE_URL}/game/apply_card`, {
                 gameState: prevGameState,
                 playerId: myPlayerId,
                 cardIndex: cardIndex,
+                // No targetCharacterId needed for Thief card
             })
             .then(response => {
                 if (response.data.error) {
                     setMessage(`Error: ${response.data.error}`);
                 } else {
-                    setGameState(response.data.gameState); 
-                    setIsStealingMode(true); 
-                    setThiefCardPlayedInfo({ cardIndex: cardIndex, cardType: cardType });
-                    // Ensure opponentHandRevealed is populated from the updated game state
-                    setOpponentHandRevealed(response.data.gameState.players[botPlayerId].hand); 
-                    setSelectedCardsToSteal([]); // IMPORTANT: Reset here to clear previous selections
-                    setMessage(`You used Theif card. Select cards from ${response.data.gameState.players[botPlayerId].player_name}'s hand.`);
+                    setGameState(response.data.gameState);
+                    if (response.data.winStatus.game_over) {
+                        setGameOver(true);
+                        setWinner(response.data.winStatus.winner);
+                        setMessage(response.data.winStatus.message);
+                    } else {
+                        setMessage(response.data.message);
+                    }
                 }
             })
             .catch(error => {
-                console.error("Error initiating theft:", error);
-                setMessage(`Error initiating theft: ${error.response?.data?.error || error.message}`);
+                console.error("Error using Thief card:", error);
+                setMessage(`Error using Thief card: ${error.response?.data?.error || error.message}`);
             });
             return prevGameState; 
         }
 
-        setMessage("Playing card...");
-        
-        axios.post(`${API_BASE_URL}/game/apply_card`, {
-            gameState: prevGameState, 
-            playerId: myPlayerId,
-            cardIndex: cardIndex,
-            targetCharacterId: targetCharacterId,
-        })
-        .then(response => {
-            if (response.data.error) {
-                setMessage(`Error: ${response.data.error}`);
-            } else {
-                setGameState(response.data.gameState); 
-                if (response.data.winStatus.game_over) {
-                    setGameOver(true);
-                    setWinner(response.data.winStatus.winner);
-                    setMessage(response.data.winStatus.message);
-                } else {
-                    setMessage(response.data.message || "Card played successfully! You can play another or end turn.");
-                }
-            }
-        })
-        .catch(error => {
-            console.error("Error applying card:", error);
-            setMessage(`Error: ${error.response?.data?.error || error.message}`);
-        });
-
-        return prevGameState;
-    });
-  };
-
-  const handleCardSelectedForSteal = (selectedOpponentCardIndex) => {
-    if (!isStealingMode || !thiefCardPlayedInfo) {
-        setMessage("Not in a valid stealing state.");
-        return;
-    }
-
-    const maxStealable = 5 - gameState.players[myPlayerId].hand.length;
-    const currentOpponentHandSize = gameState.players[botPlayerId].hand.length;
-
-    const isAlreadySelected = selectedCardsToSteal.includes(selectedOpponentCardIndex);
-
-    let updatedSelectedCards;
-    if (isAlreadySelected) {
-        updatedSelectedCards = selectedCardsToSteal.filter(idx => idx !== selectedOpponentCardIndex);
-    } else {
-        if (selectedCardsToSteal.length < maxStealable && selectedOpponentCardIndex < currentOpponentHandSize) {
-            updatedSelectedCards = [...selectedCardsToSteal, selectedOpponentCardIndex];
-        } else {
-            setMessage(`Cannot steal more than ${maxStealable} cards, or invalid selection.`);
-            return;
-        }
-    }
-    setSelectedCardsToSteal(updatedSelectedCards);
-  };
-
-  const confirmSteal = async () => {
-    if (!isStealingMode || selectedCardsToSteal.length === 0) {
-        setMessage("No cards selected to steal or not in stealing mode.");
-        return;
-    }
-
-    setMessage("Stealing selected cards...");
-    try {
-        const response = await axios.post(`${API_BASE_URL}/game/apply_card`, {
-            gameState: gameState,
-            playerId: myPlayerId,
-            cardIndex: thiefCardPlayedInfo.cardIndex,
-            selectedCardIndicesFromOpponent: selectedCardsToSteal,
-        });
-        if (response.data.error) {
-            setMessage(`Error: ${response.data.error}`);
-        } else {
-            setGameState(response.data.gameState);
-            setIsStealingMode(false); 
-            setThiefCardPlayedInfo(null);
-            setOpponentHandRevealed([]);
-            setSelectedCardsToSteal([]); // IMPORTANT: Clear on confirmation
-            if (response.data.winStatus.game_over) {
-                setGameOver(true);
-                setWinner(response.data.winStatus.winner);
-                setMessage(response.data.winStatus.message);
-            } else {
-                setMessage(response.data.message);
-            }
-        }
-    } catch (error) {
-        console.error("Error stealing cards:", error);
-        setMessage(`Error stealing cards: ${error.response?.data?.error || error.message}`);
-    }
-  };
-
-  const cancelSteal = () => {
-    setIsStealingMode(false);
-    setThiefCardPlayedInfo(null);
-    setOpponentHandRevealed([]);
-    setSelectedCardsToSteal([]); // IMPORTANT: Clear on cancel
-    setMessage("Stealing cancelled.");
-
-    handlePlayerBeingStolenFromResponse('thief_cancel', null, { isThiefInitiator: true, thiefCardPlayedInfo: thiefCardPlayedInfo });
-  };
-
-  const handlePlayerBeingStolenFromResponse = async (responseType, antiTheftCardIndex = null, options = {}) => {
-    setGameState(prevGameState => {
-        if (!prevGameState) return null;
-        
-        const isTargetResponding = (prevGameState.theft_in_progress && prevGameState.theft_in_progress.target_player_id === myPlayerId);
-        const isThiefCancelling = (prevGameState.theft_in_progress && prevGameState.theft_in_progress.thief_player_id === myPlayerId && options.isThiefInitiator);
-
-        if (!isTargetResponding && !isThiefCancelling) {
-            setMessage("Not in a valid theft response state.");
-            return prevGameState;
-        }
-
-        setMessage(`Responding to theft...`);
-
-        axios.post(`${API_BASE_URL}/game/respond_to_theft`, {
-            gameState: prevGameState,
-            targetPlayerId: myPlayerId, 
-            responseType: responseType,
-            antiTheftCardIndex: antiTheftCardIndex,
-            thiefPlayerId: options.isThiefInitiator ? myPlayerId : (prevGameState.theft_in_progress ? prevGameState.theft_in_progress.thief_player_id : null),
-            thiefCardIndex: options.isThiefInitiator ? options.thiefCardPlayedInfo.cardIndex : (prevGameState.theft_in_progress ? prevGameState.theft_in_progress.thief_card_index : null),
-        })
-        .then(response => {
-            if (response.data.error) {
-                setMessage(`Error in theft response: ${response.data.error}`);
-            } else {
-                setGameState(response.data.gameState); 
-            }
-        })
-        .catch(error => {
-            console.error("Error in theft response:", error);
-            setMessage(`Error in theft response: ${error.response?.data?.error || error.message}`);
-        });
+        // For other card types, they should be dragged and dropped onto a character.
+        setMessage("Please drag and drop this card onto a character.");
         return prevGameState;
     });
   };
@@ -317,8 +146,8 @@ function SinglePlayerGame() {
     setGameState(prevGameState => { 
         if (!prevGameState) return null;
 
-        if (prevGameState.current_turn !== myPlayerId || gameOver || isStealingMode || isUnderTheftAttempt) {
-            setMessage("Not your turn or game is over, or in special action mode.");
+        if (prevGameState.current_turn !== myPlayerId || gameOver) {
+            setMessage("Not your turn or game is over.");
             return prevGameState;
         }
 
@@ -353,7 +182,7 @@ function SinglePlayerGame() {
     setGameState(prevGameState => { 
         if (!prevGameState) return null;
 
-        if (gameOver || prevGameState.current_turn !== botPlayerId || isStealingMode || isUnderTheftAttempt) return prevGameState;
+        if (gameOver || prevGameState.current_turn !== botPlayerId) return prevGameState;
 
         setMessage("AI is thinking...");
         axios.post(`${API_BASE_URL}/game/bot_move`, { gameState: prevGameState })
@@ -380,11 +209,6 @@ function SinglePlayerGame() {
   };
 
   const handleCharacterClick = (characterId) => {
-    if (isStealingMode || isUnderTheftAttempt) {
-      setMessage("You are in a special action mode. Cannot click characters.");
-      return;
-    }
-
     let character = null;
     for (const playerKey in gameState.players) {
         character = gameState.players[playerKey].characters.find(char => char.id === characterId);
@@ -405,11 +229,6 @@ function SinglePlayerGame() {
 
   const player1 = gameState.players[myPlayerId];
   const player2 = gameState.players[botPlayerId];
-  const maxStealableCardsCalc = 5 - player1.hand.length;
-
-  const availableAntiTheftCards = isUnderTheftAttempt ? 
-    player1.hand.filter(card => card.type === 'anti_theft').map((card, idx) => ({ ...card, originalIndex: player1.hand.indexOf(card) })) : [];
-
 
   return (
     <div className="game-container">
@@ -427,14 +246,6 @@ function SinglePlayerGame() {
             isOpponentZone={true}
             myPlayerId={myPlayerId}
             currentTurnPlayerId={gameState.current_turn}
-            isStealingMode={isStealingMode} 
-            opponentHand={opponentHandRevealed} 
-            onCardSelectedForSteal={handleCardSelectedForSteal}
-            maxStealableCards={maxStealableCardsCalc}
-            selectedCardsToStealCount={selectedCardsToSteal.length}
-            selectedOpponentCardIndices={selectedCardsToSteal}
-            isUnderTheftAttempt={isUnderTheftAttempt} 
-            thiefPlayerId={thiefAttackerId}
           />
 
           {/* Player 1 Zone */}
@@ -449,9 +260,6 @@ function SinglePlayerGame() {
             isOpponentZone={false}
             myPlayerId={myPlayerId}
             currentTurnPlayerId={gameState.current_turn}
-            isStealingMode={isStealingMode}
-            isUnderTheftAttempt={isUnderTheftAttempt}
-            thiefPlayerId={thiefAttackerId}
           />
 
           {/* Player 1 Hand */}
@@ -462,19 +270,15 @@ function SinglePlayerGame() {
                   key={`${index}-${card.name}-${JSON.stringify(card.effect)}`}
                   card={card}
                   index={index}
-                  isDraggable={gameState.current_turn === myPlayerId && !gameOver && !isStealingMode && !isUnderTheftAttempt}
+                  isDraggable={gameState.current_turn === myPlayerId && !gameOver}
                   playerSourceId={myPlayerId}
-                  onClick={handlePlayCardAction}
-                  isStealingMode={isStealingMode}
-                  isSelected={thiefCardPlayedInfo && thiefCardPlayedInfo.cardIndex === index}
-                  isUnderTheftAttempt={isUnderTheftAttempt} 
-                  thiefPlayerId={thiefAttackerId}
+                  onClick={handlePlayCardAction} // Handle clicks for Thief card
                 />
               ))}
             </div>
             <button 
               onClick={handleEndTurn} 
-              disabled={gameState.current_turn !== myPlayerId || gameOver || isStealingMode || isUnderTheftAttempt}
+              disabled={gameState.current_turn !== myPlayerId || gameOver}
               className="end-turn-button"
             >
               End Turn
@@ -499,54 +303,6 @@ function SinglePlayerGame() {
               </div>
               {gameOver && <h2 className="game-over-message">{winner === myPlayerId ? 'You Won!' : 'AI Won!'}</h2>}
               {gameOver && <button onClick={initializeGame} className="restart-button">Play Again</button>}
-
-              {/* Buttons for Thief card stealing mode */}
-              {isStealingMode && (
-                <div className="steal-actions">
-                  <p className="steal-prompt">Select cards to steal ({selectedCardsToSteal.length}/{maxStealableCardsCalc}):</p>
-                  <button onClick={confirmSteal} disabled={selectedCardsToSteal.length === 0}>
-                    Confirm Steal
-                  </button>
-                  <button onClick={cancelSteal}>Cancel Steal</button>
-                </div>
-              )}
-
-              {/* Anti-Theft Response UI */}
-              {isUnderTheftAttempt && (
-                <div className="anti-theft-response-area">
-                    <h3>Theft Attempt!</h3>
-                    <p>{gameState.players[thiefAttackerId].player_name} is trying to steal your cards!</p>
-                    {player1.hand.filter(card => card.type === 'anti_theft').length > 0 ? (
-                        <>
-                            <p>Do you want to use an anti-theft card?</p>
-                            <div className="anti-theft-cards-options">
-                                {/* Use filtered list for display, but original index for click */}
-                                {player1.hand.map((card, idx) => (
-                                    card.type === 'anti_theft' && (
-                                        <HandCard
-                                            key={`anti-theft-${player1.hand.indexOf(card)}-${card.name}`} 
-                                            card={card}
-                                            index={player1.hand.indexOf(card)} 
-                                            isDraggable={false}
-                                            playerSourceId={myPlayerId}
-                                            onClick={handlePlayCardAction}
-                                            isStealingMode={false}
-                                            isUnderTheftAttempt={true}
-                                            thiefPlayerId={thiefAttackerId}
-                                            isSelected={selectedCardsToSteal.includes(player1.hand.indexOf(card))}
-                                        />
-                                    )
-                                ))}
-                            </div>
-                            <button onClick={() => handlePlayerBeingStolenFromResponse('no_response')}>
-                                No, let them steal
-                            </button>
-                        </>
-                    ) : (
-                        <p>You have no anti-theft cards to use. Theft will proceed.</p>
-                    )}
-                </div>
-              )}
           </div>
         </div>
       </div>

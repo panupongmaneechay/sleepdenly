@@ -3,12 +3,8 @@ from game_logic import apply_card_effect, check_win_condition, end_turn, MAX_HAN
 
 def make_bot_move(game_state):
     bot_player_id = "player2"
-    
-    # Anti Theft Card - Removed logic
-    if game_state["theft_in_progress"] and game_state["theft_in_progress"]["target_player_id"] == bot_player_id:
-        print("Bot is targeted by theft, awaiting player's response. (This state should not be reached if theft cards are removed)")
-        return game_state 
-    
+    opponent_player_id = "player1" # The player the bot will target
+
     if game_state["current_turn"] != bot_player_id:
         return game_state
 
@@ -17,27 +13,40 @@ def make_bot_move(game_state):
     player1_characters = current_game_state["players"]["player1"]["characters"]
     player2_characters = current_game_state["players"][bot_player_id]["characters"]
     
+    # Bot will attempt to play cards until it can't or chooses to end turn
     while True:
         best_move_found = False
-        playable_hand = list(bot_hand) # Use a copy to iterate
         
-        if not playable_hand: 
+        if not bot_hand: 
             break
 
-        # Removed Thief Card Logic
+        # Strategy for Thief Card: Use if opponent has cards to steal
+        thief_card_index = -1
+        for idx, card in enumerate(bot_hand):
+            if card["type"] == "theif":
+                thief_card_index = idx
+                break
+
+        if thief_card_index != -1:
+            if len(current_game_state["players"][opponent_player_id]["hand"]) > 0:
+                try:
+                    # For Thief, target_character_id is None as it affects the hand, not a character
+                    current_game_state = apply_card_effect(current_game_state, bot_player_id, thief_card_index)
+                    bot_hand = list(current_game_state["players"][bot_player_id]["hand"]) # Update hand after playing card
+                    best_move_found = True
+                    print(f"Bot plays Thief and steals cards from {current_game_state['players'][opponent_player_id]['player_name']}.")
+                except ValueError as e:
+                    print(f"Bot failed to play Thief card: {e}")
+                    pass # Continue to next card if this one fails
+            if best_move_found:
+                continue 
 
         # Lucky Card
-        # วนหาการ์ด Lucky
         lucky_card_index = -1
-        for idx, card in enumerate(playable_hand): # Iterate through playable_hand
+        for idx, card in enumerate(bot_hand):
             if card["type"] == "lucky":
-                # Find its original index in the current bot_hand state
-                try:
-                    original_index = bot_hand.index(card)
-                    lucky_card_index = original_index
-                    break
-                except ValueError:
-                    continue # Card might have been played already if logic changed
+                lucky_card_index = idx # Get actual index from bot_hand
+                break
 
         if lucky_card_index != -1:
             # Prioritize characters that are not asleep and need sleep
@@ -47,7 +56,7 @@ def make_bot_move(game_state):
                 char_to_sleep = sorted(target_chars, key=lambda x: x["max_sleep"] - x["current_sleep"], reverse=True)[0]
                 try:
                     current_game_state = apply_card_effect(current_game_state, bot_player_id, lucky_card_index, char_to_sleep["id"])
-                    bot_hand = list(current_game_state["players"][bot_player_id]["hand"]) # Update hand after playing card
+                    bot_hand = list(current_game_state["players"][bot_player_id]["hand"]) # Update hand
                     best_move_found = True
                     print(f"Bot plays Lucky Sleep on its own character {char_to_sleep['name']} for instant sleep.")
                 except ValueError as e:
@@ -56,16 +65,12 @@ def make_bot_move(game_state):
             if best_move_found:
                 continue 
 
-        # Removed Dispel Card Logic
-        # Removed Defensive Card Logic
-            
         # Attack Card - Prioritize putting opponent characters to sleep
         if not best_move_found:
             for card_index_in_hand, card in enumerate(bot_hand): # Iterate over actual bot_hand to get correct index
                 if card["type"] == "attack":
                     for char in player1_characters:
-                        if not char["is_asleep"]: # No protection check needed now
-                            # Calculate potential sleep. Prioritize attacks that make them sleep EXACTLY
+                        if not char["is_asleep"]:
                             potential_sleep = char["current_sleep"] + card["effect"]["value"]
                             
                             # Check if this attack would make the opponent character sleep (reach max_sleep)

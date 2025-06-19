@@ -1,3 +1,4 @@
+// frontend/src/components/CharacterCard.jsx
 import React, { useState, useEffect } from 'react';
 import { useDrop } from 'react-dnd';
 import './CharacterCard.css'; // Existing CSS
@@ -11,64 +12,56 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
 
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: 'card',
+    item: { 
+      cardIndex: -1, // This component does not directly handle card index as it's a drop target
+      cardType: '',
+      cardEffectValue: null, 
+      playerSourceId: '' 
+    },
+    // The actual item properties are received in the drop function
+    // For canDrop, we only check if it's generally droppable for ANY card (except Thief)
     canDrop: (item, monitor) => {
       // 'item' here contains the properties from the dragged card's `useDrag` hook
-      const { cardType, cardEffectValue, playerSourceId } = item;
+      const { cardType } = item;
 
-      // Theif, Defensive, Dispel, Anti_theft cards are removed.
-      // So no need to check for them specifically here.
-      // The only special card left is 'Lucky'.
-
+      // Cannot drop if the character is asleep or if isDroppable is false
       if (!isDroppable || character.is_asleep) return false; 
       
-      const currentSleep = character.current_sleep;
-      const maxSleep = character.max_sleep;
+      // Thief card does not target characters, so it cannot be dropped
+      if (cardType === 'theif') return false; 
 
-      if (cardType === 'attack') {
-          // No protection mechanism left in the game for regular attacks.
-          // Attack cards can always be dropped on non-asleep characters.
-          // The backend will handle the exact sleep calculation (including negative values) and conditions for sleeping.
-          return true; 
-      } else if (cardType === 'support') {
-          // Allow support cards to be dropped even if they would exceed max_sleep.
-          // The backend logic (game_logic.py) will handle capping the sleep at max_sleep.
-          return true;
-      } else if (cardType === 'lucky') {
-          if (targetPlayerId !== playerSourceId) return false; // Lucky always on self
-          return true;
-      }
+      // Lucky card can only be used on the player's own characters
+      if (cardType === 'lucky' && targetPlayerId !== item.playerSourceId) return false;
       
-      return false; // Default: cannot drop unknown card types (should not happen with filtered cards)
+      return true; // All other cards (attack, support, lucky on self) can be dropped
     },
     drop: (item, monitor) => {
-      const playingPlayerId = monitor.getItem().playerSourceId; 
+      // When a card is dropped, call the onCardDrop prop with necessary info
+      onCardDrop(item.cardIndex, character.id, item.cardType, targetPlayerId, item.playerSourceId);
       
       // Trigger effect display based on card type immediately on drop
       let icon = '';
       let className = '';
       if (item.cardType === 'support') {
-        icon = '💤'; // หรือ 'Zzz'
+        icon = '💤'; 
         className = 'effect-zzz';
       } else if (item.cardType === 'attack') {
-        icon = '💥'; // หรือ 'X_X'
+        icon = '💥'; 
         className = 'effect-attack';
-      } else if (item.cardType === 'lucky') { // Only lucky is left from special cards
-        icon = '⭐'; // หรือ '🌟'
+      } else if (item.cardType === 'lucky') {
+        icon = '⭐'; 
         className = 'effect-lucky';
       }
-      // Defensive, Dispel, Thief, Anti_theft are removed, so no icons for them here.
       
       setEffectIcon(icon);
       setEffectClass(className);
       setEffect(Date.now()); // Update state to trigger animation
-
-      onCardDrop(item.cardIndex, character.id, item.cardType, targetPlayerId, playingPlayerId);
     },
     collect: (monitor) => ({
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(), 
     }),
-  }), [isDroppable, character.is_asleep, character.current_sleep, character.max_sleep, targetPlayerId]); 
+  }), [isDroppable, character.is_asleep, targetPlayerId, onCardDrop]); 
 
   // Effect to clear the visual effect after a delay
   useEffect(() => {
@@ -92,8 +85,6 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
   // Helper to generate image path for character
   const getCharacterImagePath = (name) => {
     const formattedName = name.toLowerCase().replace(/\s/g, '-');
-    console.log('=====',formattedName);
-    
     return `/assets/character/${formattedName}.png`; 
   };
 

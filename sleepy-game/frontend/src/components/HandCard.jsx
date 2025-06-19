@@ -1,8 +1,9 @@
+// frontend/src/components/HandCard.jsx
 import React from 'react';
 import { useDrag } from 'react-dnd';
 import './HandCard.css';
 
-function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceId, isStealingMode, isOpponentCard = false, isUnderTheftAttempt = false, thiefPlayerId = null, selectedOpponentCardIndices = [] }) {
+function HandCard({ card, index, onClick, isDraggable, playerSourceId, isOpponentCard = false }) {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'card',
     item: { 
@@ -11,39 +12,34 @@ function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceI
       cardEffectValue: card.effect && card.effect.value !== undefined ? card.effect.value : null, 
       playerSourceId: playerSourceId 
     },
-    // Only allow dragging if it's draggable and not a special card type that is no longer in use
-    canDrag: isDraggable && card.type !== 'theif' && card.type !== 'anti_theft' && !isOpponentCard && !isStealingMode && !isUnderTheftAttempt,
+    // Only allow dragging if it's draggable and not an opponent's card AND NOT a 'theif' card
+    canDrag: isDraggable && card.type !== 'theif' && !isOpponentCard,
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }), [index, card, isDraggable, playerSourceId, isStealingMode, isUnderTheftAttempt]);
-
-  // isSelected and selectedOpponentCardIndices logic will be unused if Thief/Anti_theft removed
-  const isCurrentlySelectedForSteal = isStealingMode && isOpponentCard && selectedOpponentCardIndices.includes(index);
+  }), [index, card, isDraggable, playerSourceId, isOpponentCard]);
 
   const cardClass = `hand-card 
-    ${isSelected ? 'selected' : ''} 
     ${isDragging ? 'dragging' : ''} 
     ${card.cssClass || 'card-default'}
-    ${isCurrentlySelectedForSteal ? 'stealing-target' : ''}
-    ${isOpponentCard && !isStealingMode && !isUnderTheftAttempt ? 'opponent-hidden' : ''}
-    ${isUnderTheftAttempt && card.type === 'anti_theft' && playerSourceId !== thiefPlayerId ? 'anti-theft-highlight' : ''}
+    ${isOpponentCard ? 'opponent-hidden' : ''}
     `;
 
-  // Simplify isClickable as Thief/Anti_theft logic is removed
-  const isClickable = false; // By default, cards are not clickable in hand except by drag/drop
-
   const handleClick = () => {
-    // With drag/drop, direct clicks on cards in hand are generally not intended
-    // unless they trigger a special action (like Thief did).
-    // As Thief/Anti_theft are removed, this click handler can remain mostly inactive.
-    // If you add new click-only card types, you'd add logic here.
-    console.log(`Card ${card.name} clicked, but no direct click action defined.`);
+    // Thief card is now triggered by a click if it's draggable (meaning it's the current player's turn)
+    if (isDraggable && card.type === 'theif') {
+      onClick(index, card.type); // Pass index and card type to the handler
+    } else {
+        // For other cards, direct click in hand does nothing (they are meant for drag/drop)
+        // unless you add other specific clickable card types here.
+        console.log(`Card ${card.name} clicked, but no direct click action defined or card type not applicable.`);
+    }
   };
 
   const renderCardEffect = () => {
     if (card.effect && card.effect.type) {
       if (card.effect.type === 'force_sleep') return 'Instant Sleep!';
+      if (card.effect.type === 'steal_cards') return 'Steal All Cards!'; // Message for Thief
       if (card.effect.value !== undefined && card.effect.value !== null) {
         const sign = card.effect.value > 0 ? '+' : '';
         return `${sign}${card.effect.value} hours`;
@@ -59,9 +55,9 @@ function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceI
 
   return (
     <div
-      ref={isDraggable && card.type !== 'theif' && card.type !== 'anti_theft' && !isOpponentCard && !isStealingMode && !isUnderTheftAttempt ? drag : null}
+      ref={isDraggable && card.type !== 'theif' && !isOpponentCard ? drag : null} // Only draggable for non-theif, non-opponent cards
       className={cardClass}
-      // onClick={isClickable ? handleClick : null} // Keep this for future direct click cards if needed
+      onClick={handleClick} // Always allow click, logic inside handles what happens
       style={{ opacity: isDragging ? 0.5 : 1 }}
     >
       <div className="card-image-container">
@@ -75,7 +71,7 @@ function HandCard({ card, index, isSelected, onClick, isDraggable, playerSourceI
       <h3>{card.name}</h3>
       <p className="card-description">{card.description}</p>
       <p className="card-effect">{renderCardEffect()}</p>
-      {(isOpponentCard && !isStealingMode && !isUnderTheftAttempt) ? (
+      {isOpponentCard ? (
         <div className="card-back">?</div>
       ) : null}
     </div>

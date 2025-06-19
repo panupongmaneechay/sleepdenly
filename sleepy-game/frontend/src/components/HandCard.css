@@ -146,6 +146,9 @@ body.dark-mode .hand-card.card-lucky .card-effect {
   color: #FFFF00;
 }
 
+/* Defensive and Dispel cards are removed from game logic,
+   but styles are kept commented out for reference if needed later. */
+/*
 .hand-card.card-defensive {
   border-color: #6f42c1;
   background-color: #e6e6fa;
@@ -179,6 +182,7 @@ body.dark-mode .hand-card.card-dispel {
 body.dark-mode .hand-card.card-dispel .card-effect {
   color: #4dd0e1;
 }
+*/
 
 /* Theif Card Style */
 .hand-card.card-theif {
@@ -200,7 +204,8 @@ body.dark-mode .hand-card.card-theif .card-effect {
   color: #d2b48c;
 }
 
-/* Anti-Theft Card Style */
+/* Anti-Theft Card Style is removed as per request */
+/*
 .hand-card.card-anti-theft {
   border-color: #ffd700;
   background-color: #fffacd;
@@ -219,9 +224,10 @@ body.dark-mode .hand-card.card-anti-theft {
 body.dark-mode .hand-card.card-anti-theft .card-effect {
   color: #ffaa00;
 }
+*/
 
-
-/* Highlight for anti-theft cards when theft is attempted */
+/* Styles for theft interaction are removed as per request */
+/*
 .hand-card.anti-theft-highlight {
     border: 3px solid #ffcc00;
     box-shadow: 0 0 20px rgba(255, 204, 0, 0.9);
@@ -233,7 +239,6 @@ body.dark-mode .hand-card.anti-theft-highlight {
     box-shadow: 0 0 20px rgba(255, 170, 0, 0.9);
 }
 
-/* Highlight for opponent's cards being targeted for stealing */
 .hand-card.stealing-target {
     border: 3px solid #007bff;
     box-shadow: 0 0 15px rgba(0, 123, 255, 0.7);
@@ -244,6 +249,7 @@ body.dark-mode .hand-card.stealing-target {
     border-color: #87CEEB;
     box-shadow: 0 0 15px rgba(135, 206, 235, 0.9);
 }
+*/
 
 /* Style for hidden opponent cards */
 .hand-card.opponent-hidden {

@@ -43,8 +43,11 @@ body.dark-mode .effect-attack {
     text-shadow: 0 0 5px rgba(255, 99, 71, 0.7);
 }
 
+/* Defensive and Dispel effects are removed from game logic,
+   but styles are kept commented out for reference if needed later. */
+/*
 .effect-defensive {
-    color: #6f42c1; /* Purple for defensive */
+    color: #6f42c1;
     text-shadow: 0 0 5px rgba(111, 66, 193, 0.7);
 }
 body.dark-mode .effect-defensive {
@@ -53,13 +56,14 @@ body.dark-mode .effect-defensive {
 }
 
 .effect-dispel {
-    color: #00bcd4; /* Cyan for dispel */
+    color: #00bcd4;
     text-shadow: 0 0 5px rgba(0, 188, 212, 0.7);
 }
 body.dark-mode .effect-dispel {
     color: #4dd0e1;
     text-shadow: 0 0 5px rgba(77, 208, 225, 0.7);
 }
+*/
 
 .effect-lucky {
     color: #ffc107; /* Gold/Orange for lucky */
@@ -70,7 +74,7 @@ body.dark-mode .effect-lucky {
     text-shadow: 0 0 10px rgba(255, 255, 0, 0.9);
 }
 
-/* New: Theif Card Effect Style */
+/* Theif Card Effect Style */
 .effect-theif {
     color: #8b4513; /* SaddleBrown for theif */
     text-shadow: 0 0 5px rgba(139, 69, 19, 0.7);
@@ -80,11 +84,14 @@ body.dark-mode .effect-theif {
     text-shadow: 0 0 5px rgba(210, 180, 140, 0.7);
 }
 
+/* Anti-Theft Card Effect Style is removed as per request */
+/*
 .effect-anti-theft {
-    color: #ffd700; /* Gold for anti-theft */
+    color: #ffd700;
     text-shadow: 0 0 5px rgba(255, 215, 0, 0.7);
 }
 body.dark-mode .effect-anti-theft {
-    color: #ffaa00; /* Darker Gold for dark mode */
+    color: #ffaa00;
     text-shadow: 0 0 5px rgba(255, 170, 0, 0.7);
 }
+*/
