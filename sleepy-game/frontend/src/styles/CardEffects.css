@@ -43,24 +43,6 @@ body.dark-mode .effect-attack {
     text-shadow: 0 0 5px rgba(255, 99, 71, 0.7);
 }
 
-.effect-defensive {
-    color: #6f42c1; /* Purple for defensive */
-    text-shadow: 0 0 5px rgba(111, 66, 193, 0.7);
-}
-body.dark-mode .effect-defensive {
-    color: #b366ff;
-    text-shadow: 0 0 5px rgba(179, 102, 255, 0.7);
-}
-
-.effect-dispel {
-    color: #00bcd4; /* Cyan for dispel */
-    text-shadow: 0 0 5px rgba(0, 188, 212, 0.7);
-}
-body.dark-mode .effect-dispel {
-    color: #4dd0e1;
-    text-shadow: 0 0 5px rgba(77, 208, 225, 0.7);
-}
-
 .effect-lucky {
     color: #ffc107; /* Gold/Orange for lucky */
     text-shadow: 0 0 10px rgba(255, 193, 7, 0.9); /* Stronger glow */
@@ -70,7 +52,7 @@ body.dark-mode .effect-lucky {
     text-shadow: 0 0 10px rgba(255, 255, 0, 0.9);
 }
 
-/* New: Theif Card Effect Style */
+/* Theif Card Effect Style */
 .effect-theif {
     color: #8b4513; /* SaddleBrown for theif */
     text-shadow: 0 0 5px rgba(139, 69, 19, 0.7);
@@ -80,11 +62,12 @@ body.dark-mode .effect-theif {
     text-shadow: 0 0 5px rgba(210, 180, 140, 0.7);
 }
 
-.effect-anti-theft {
-    color: #ffd700; /* Gold for anti-theft */
-    text-shadow: 0 0 5px rgba(255, 215, 0, 0.7);
+/* New: Swap Card Effect Style */
+.effect-swap {
+    color: #9400D3; /* DarkViolet for swap */
+    text-shadow: 0 0 5px rgba(148, 0, 211, 0.7);
 }
-body.dark-mode .effect-anti-theft {
-    color: #ffaa00; /* Darker Gold for dark mode */
-    text-shadow: 0 0 5px rgba(255, 170, 0, 0.7);
+body.dark-mode .effect-swap {
+    color: #EE82EE; /* Violet */
+    text-shadow: 0 0 5px rgba(238, 130, 238, 0.7);
 }

@@ -146,40 +146,6 @@ body.dark-mode .hand-card.card-lucky .card-effect {
   color: #FFFF00;
 }
 
-.hand-card.card-defensive {
-  border-color: #6f42c1;
-  background-color: #e6e6fa;
-  color: #4b0082;
-}
-body.dark-mode .hand-card.card-defensive {
-  border-color: #b366ff;
-  background-color: #3b2c55;
-  color: #d6b3ff;
-}
-.hand-card.card-defensive .card-effect {
-  color: #6f42c1;
-}
-body.dark-mode .hand-card.card-defensive .card-effect {
-  color: #b366ff;
-}
-
-.hand-card.card-dispel {
-  border-color: #00bcd4;
-  background-color: #e0f7fa;
-  color: #006064;
-}
-body.dark-mode .hand-card.card-dispel {
-  border-color: #4dd0e1;
-  background-color: #003a3d;
-  color: #b2ebf2;
-}
-.hand-card.card-dispel .card-effect {
-  color: #00bcd4;
-}
-body.dark-mode .hand-card.card-dispel .card-effect {
-  color: #4dd0e1;
-}
-
 /* Theif Card Style */
 .hand-card.card-theif {
   border-color: #8b4513;
@@ -200,50 +166,26 @@ body.dark-mode .hand-card.card-theif .card-effect {
   color: #d2b48c;
 }
 
-/* Anti-Theft Card Style */
-.hand-card.card-anti-theft {
-  border-color: #ffd700;
-  background-color: #fffacd;
-  color: #856404;
-  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+/* New: Swap Card Style */
+.hand-card.card-swap {
+  border-color: #9400D3; /* DarkViolet */
+  background-color: #e6ccff; /* Light purple */
+  color: #4b0082;
+  box-shadow: 0 0 10px rgba(148, 0, 211, 0.5);
 }
-body.dark-mode .hand-card.card-anti-theft {
-  border-color: #ffaa00;
-  background-color: #4d4013;
-  color: #ffe066;
-  box-shadow: 0 0 10px rgba(255, 170, 0, 0.7);
+body.dark-mode .hand-card.card-swap {
+  border-color: #EE82EE; /* Violet */
+  background-color: #5d3f82;
+  color: #f2e6ff;
+  box-shadow: 0 0 10px rgba(238, 130, 238, 0.7);
 }
-.hand-card.card-anti-theft .card-effect {
-  color: #ffd700;
+.hand-card.card-swap .card-effect {
+  color: #9400D3;
 }
-body.dark-mode .hand-card.card-anti-theft .card-effect {
-  color: #ffaa00;
-}
-
-
-/* Highlight for anti-theft cards when theft is attempted */
-.hand-card.anti-theft-highlight {
-    border: 3px solid #ffcc00;
-    box-shadow: 0 0 20px rgba(255, 204, 0, 0.9);
-    transform: scale(1.08);
-    cursor: pointer;
-}
-body.dark-mode .hand-card.anti-theft-highlight {
-    border-color: #ffaa00;
-    box-shadow: 0 0 20px rgba(255, 170, 0, 0.9);
+body.dark-mode .hand-card.card-swap .card-effect {
+  color: #EE82EE;
 }
 
-/* Highlight for opponent's cards being targeted for stealing */
-.hand-card.stealing-target {
-    border: 3px solid #007bff;
-    box-shadow: 0 0 15px rgba(0, 123, 255, 0.7);
-    transform: scale(1.05);
-    cursor: pointer;
-}
-body.dark-mode .hand-card.stealing-target {
-    border-color: #87CEEB;
-    box-shadow: 0 0 15px rgba(135, 206, 235, 0.9);
-}
 
 /* Style for hidden opponent cards */
 .hand-card.opponent-hidden {
@@ -272,4 +214,24 @@ body.dark-mode .hand-card.stealing-target {
 .hand-card.opponent-hidden .card-description,
 .hand-card.opponent-hidden .card-effect {
   visibility: hidden;
+}
+
+/* New: Style for cards that can be selected for swap */
+.hand-card.selectable-for-swap {
+    cursor: pointer;
+    border: 2px dashed #00aced; /* Light blue dashed border */
+}
+body.dark-mode .hand-card.selectable-for-swap {
+    border-color: #61dafb; /* React blue for dark mode */
+}
+
+/* New: Style for cards already selected for swap */
+.hand-card.selected-for-swap {
+    border: 3px solid #ff00ff; /* Magenta solid border */
+    box-shadow: 0 0 10px rgba(255, 0, 255, 0.7);
+    transform: scale(1.05);
+}
+body.dark-mode .hand-card.selected-for-swap {
+    border-color: #ff69b4; /* HotPink */
+    box-shadow: 0 0 10px rgba(255, 105, 180, 0.9);
 }

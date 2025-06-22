@@ -1,3 +1,4 @@
+// sleepy-game/frontend/src/pages/MultiPlayerGame.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
@@ -19,19 +20,26 @@ function MultiPlayerGame() {
   const [information, setInformation] = useState({ name: 'N/A', age: 'N/A', description: 'Click on a character for details.' });
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState(null);
-  const [isStealingMode, setIsStealingMode] = useState(false);
-  const [thiefCardPlayedInfo, setThiefCardPlayedInfo] = useState(null);
-  const [opponentHandRevealed, setOpponentHandRevealed] = useState([]);
-  const [selectedCardsToSteal, setSelectedCardsToSteal] = useState([]);
-  const [maxStealableCards, setMaxStealableCards] = useState(0); 
-  const [isUnderTheftAttempt, setIsUnderTheftAttempt] = useState(false);
-  const [thiefAttackerId, setThiefAttackerId] = useState(null);
   const [logEntries, setLogEntries] = useState([]); // สถานะใหม่สำหรับเก็บ Log
+
+  // New states for Swap card logic
+  const [swapInProgress, setSwapInProgress] = useState(false);
+  const [selectedCardsToSwap, setSelectedCardsToSwap] = useState([]); // Stores { index, card, isOpponent }
+  const [swapCardPlayedIndex, setSwapCardPlayedIndex] = useState(null); // Stores the index of the 'Swap' card itself
 
   const myPlayerId = location.state?.playerId;
   const opponentPlayerId = myPlayerId === 'player1' ? 'player2' : 'player1';
 
   const isMyTurn = gameState && gameState.current_turn === myPlayerId;
+
+  // Helper to determine maximum cards to swap based on current hand sizes
+  const getMaxCardsToSwap = () => {
+    if (!gameState || !myPlayerId) return 0;
+    // Exclude the swap card itself from the count of cards the player has to swap
+    const myHandSizeExcludingSwap = gameState.players[myPlayerId].hand.length - (swapCardPlayedIndex !== null ? 1 : 0);
+    const opponentHandSize = gameState.players[opponentPlayerId].hand_size; // Opponent's hand_size is visible
+    return Math.min(myHandSizeExcludingSwap, opponentHandSize);
+  };
 
   useEffect(() => {
     if (!myPlayerId) {
@@ -47,22 +55,22 @@ function MultiPlayerGame() {
     socket.on('game_start', (data) => {
       console.log("Game started!", data);
       const initialPlayerState = data[`${myPlayerId}_game_state`];
-      setGameState(initialPlayerState); 
+      setGameState(initialPlayerState);
       setMessage(`Game started! It's ${data.current_turn === myPlayerId ? 'your' : 'opponent\'s'} turn.`);
-      setIsStealingMode(false);
-      setThiefCardPlayedInfo(null);
-      setOpponentHandRevealed([]);
-      setSelectedCardsToSteal([]);
-      setIsUnderTheftAttempt(false);
-      setThiefAttackerId(null);
-      setLogEntries(initialPlayerState.action_log || []); // ดึง log จาก initial state
+      setLogEntries(initialPlayerState.action_log || []);
+      setSwapInProgress(initialPlayerState.swap_in_progress || false); // Initialize from game state
+      setSelectedCardsToSwap(initialPlayerState.selected_cards_for_swap || []); // Initialize from game state
     });
 
     socket.on('game_update', (data) => {
       console.log("Game update received:", data);
       const updatedPlayerState = data[`${myPlayerId}_game_state`];
       setGameState(updatedPlayerState);
-      
+
+      // Update swapInProgress and selectedCardsToSwap from gameState
+      setSwapInProgress(updatedPlayerState.swap_in_progress || false);
+      setSelectedCardsToSwap(updatedPlayerState.selected_cards_for_swap || []);
+
       if (data.win_status.game_over) {
         setGameOver(true);
         setWinner(data.win_status.winner);
@@ -70,28 +78,7 @@ function MultiPlayerGame() {
       } else {
         setMessage(data.message);
       }
-      setLogEntries(updatedPlayerState.action_log || []); // ดึง log จาก updated state
-      
-      if (!data.hasOwnProperty('opponent_hand')) {
-        setIsStealingMode(false); 
-        setThiefCardPlayedInfo(null);
-        setOpponentHandRevealed([]);
-        setSelectedCardsToSteal([]);
-      }
-      setIsUnderTheftAttempt(false);
-      setThiefAttackerId(null);
-    });
-
-    socket.on('opponent_hand_revealed', (data) => {
-        setOpponentHandRevealed(data.opponent_hand);
-        setMaxStealableCards(data.max_stealable);
-        setMessage(data.message);
-    });
-
-    socket.on('theft_attempt', (data) => {
-        setIsUnderTheftAttempt(true);
-        setThiefAttackerId(data.thief_player_id);
-        setMessage(data.message);
+      setLogEntries(updatedPlayerState.action_log || []);
     });
 
     socket.on('player_disconnected', (data) => {
@@ -101,12 +88,6 @@ function MultiPlayerGame() {
 
     socket.on('error', (data) => {
       setMessage(`Game Error: ${data.message}`);
-      setIsStealingMode(false);
-      setThiefCardPlayedInfo(null);
-      setOpponentHandRevealed([]);
-      setSelectedCardsToSteal([]);
-      setIsUnderTheftAttempt(false);
-      setThiefAttackerId(null);
     });
 
     return () => {
@@ -114,29 +95,34 @@ function MultiPlayerGame() {
       socket.off('connect');
       socket.off('game_start');
       socket.off('game_update');
-      socket.off('opponent_hand_revealed');
-      socket.off('theft_attempt');
       socket.off('player_disconnected');
       socket.off('error');
     };
   }, [roomId, myPlayerId, opponentPlayerId, navigate]);
 
-
   const handleCardDrop = (cardIndex, targetCharacterId, cardType, targetPlayerIdOfChar, playingPlayerId) => {
+    // Prevent actions if a swap is in progress
+    if (swapInProgress) {
+        setMessage("A card swap is in progress. Please select cards to swap or cancel.");
+        return;
+    }
+
     setGameState(prevGameState => {
         if (!prevGameState) return null;
 
-        if (prevGameState.current_turn !== playingPlayerId || gameOver || isStealingMode || isUnderTheftAttempt) {
-            setMessage("Not your turn, game over, or in special action mode.");
+        if (prevGameState.current_turn !== playingPlayerId || gameOver) {
+            setMessage("Not your turn or game over.");
             return prevGameState;
         }
 
-        if (cardType === 'attack' && targetPlayerIdOfChar === playingPlayerId) {
-            setMessage("You cannot use attack cards on your own characters!");
-            return prevGameState;
+        // Thief card cannot be dropped on a character, it's used by clicking
+        if (cardType === 'theif') {
+          setMessage("Thief card cannot be dropped on a character. Click the card to use it.");
+          return prevGameState;
         }
-        if (cardType === 'lucky' && targetPlayerIdOfChar !== playingPlayerId) {
-            setMessage("Lucky Sleep card can only be used on your own characters!");
+        // Swap card cannot be dropped on a character either
+        if (cardType === 'swap') {
+            setMessage("Swap card cannot be dropped on a character. Click the card to use it.");
             return prevGameState;
         }
 
@@ -146,126 +132,147 @@ function MultiPlayerGame() {
             player_id: playingPlayerId,
             card_index: cardIndex,
             target_character_id: targetCharacterId,
+            target_card_indices: null, // Ensure this is null for non-swap cards
         });
         return prevGameState;
     });
   };
 
-  const handlePlayCardAction = (cardIndex, cardType, targetCharacterId = null, isCounteringTheft = false) => {
+  const handlePlayCardAction = (cardIndex, cardType) => {
     setGameState(prevGameState => {
         if (!prevGameState) return null;
 
-        if (isCounteringTheft) {
-            setMessage("Using anti-theft card...");
-            socket.emit('respond_to_theft', {
-                room_id: roomId,
-                player_id: myPlayerId,
-                response_type: 'use_anti_theft',
-                anti_theft_card_index: cardIndex,
-                thief_player_id: prevGameState.theft_in_progress ? prevGameState.theft_in_progress.thief_player_id : null,
-                thief_card_index: prevGameState.theft_in_progress ? prevGameState.theft_in_progress.thief_card_index : null,
-            });
+        if (prevGameState.current_turn !== myPlayerId || gameOver) {
+            setMessage("Not your turn or game over.");
             return prevGameState;
         }
 
-        if (prevGameState.current_turn !== myPlayerId || gameOver || isStealingMode || isUnderTheftAttempt) {
-            setMessage("Not your turn, game over, or in special action mode.");
+        // If a swap is already in progress, prevent playing other cards
+        if (swapInProgress) {
+            setMessage("A card swap is in progress. Please select cards to swap or cancel.");
             return prevGameState;
         }
 
         if (cardType === 'theif') {
-            setMessage("Initiating theft attempt...");
-            socket.emit('initiate_theft_attempt', {
+            setMessage("Using Thief card...");
+            socket.emit('play_card', {
                 room_id: roomId,
                 player_id: myPlayerId,
                 card_index: cardIndex,
+                target_character_id: null,
+                target_card_indices: null,
             });
-            return prevGameState; 
+            return prevGameState;
         }
 
-        setMessage("Playing card...");
-        socket.emit('play_card', {
-            room_id: roomId,
-            player_id: myPlayerId,
-            card_index: cardIndex,
-            target_character_id: targetCharacterId,
-        });
+        // Handle Swap card activation
+        if (cardType === 'swap') {
+            const myHandSizeExcludingSwap = prevGameState.players[myPlayerId].hand.length - 1;
+            const opponentHandSize = prevGameState.players[opponentPlayerId].hand_size;
+
+            if (myHandSizeExcludingSwap === 0 || opponentHandSize === 0) {
+                setMessage("You need at least one card (excluding the Swap card) and your opponent must have at least one card to use Swap.");
+                return prevGameState;
+            }
+
+            setSwapInProgress(true);
+            setSwapCardPlayedIndex(cardIndex); // Store the index of the Swap card
+            setSelectedCardsToSwap([]); // Reset any previous selections
+            setMessage(`Select up to ${Math.min(myHandSizeExcludingSwap, opponentHandSize)} of your cards and an equal number of opponent's cards to swap. Click the Confirm Swap button.`);
+            return { ...prevGameState, swap_in_progress: true }; // Update game state immediately to reflect swap mode
+        }
+
+        setMessage("Please drag and drop this card onto a character.");
         return prevGameState;
     });
   };
 
-  const handleCardSelectedForSteal = (selectedOpponentCardIndex) => {
-    if (!isStealingMode || !thiefCardPlayedInfo) {
-        setMessage("Not in a valid stealing state.");
-        return;
-    }
+  const handleSelectCardForSwap = (cardIndex, card, isOpponent) => {
+    setSelectedCardsToSwap(prevSelected => {
+      const currentSwapCount = getMaxCardsToSwap();
+      const existingSelectionIndex = prevSelected.findIndex(
+        (item) => item.index === cardIndex && item.isOpponent === isOpponent
+      );
 
-    const isAlreadySelected = selectedCardsToSteal.includes(selectedOpponentCardIndex);
+      let newSelected = [...prevSelected];
 
-    let updatedSelectedCards;
-    if (isAlreadySelected) {
-        updatedSelectedCards = selectedCardsToSteal.filter(idx => idx !== selectedOpponentCardIndex);
-    } else {
-        if (selectedCardsToSteal.length < maxStealableCards) {
-            updatedSelectedCards = [...selectedCardsToSteal, selectedOpponentCardIndex];
+      if (existingSelectionIndex !== -1) {
+        // Card already selected, unselect it
+        newSelected.splice(existingSelectionIndex, 1);
+      } else {
+        // Card not selected, select it if count allows
+        const mySelectedCount = newSelected.filter(item => !item.isOpponent).length;
+        const oppSelectedCount = newSelected.filter(item => item.isOpponent).length;
+
+        if (isOpponent && oppSelectedCount < currentSwapCount) {
+          newSelected.push({ index: cardIndex, card, isOpponent });
+        } else if (!isOpponent && mySelectedCount < currentSwapCount) {
+          // Ensure the selected card is not the Swap card itself
+          if (cardIndex !== swapCardPlayedIndex || isOpponent) { // If it's my card, ensure it's not the swap card
+              newSelected.push({ index: cardIndex, card, isOpponent });
+          } else {
+              setMessage("You cannot select the Swap card itself for the swap.");
+          }
         } else {
-            setMessage(`Cannot steal more than ${maxStealableCards} cards.`);
-            return;
+            setMessage(`You can only select up to ${currentSwapCount} cards from each side.`);
         }
-    }
-    setSelectedCardsToSteal(updatedSelectedCards);
-    setMessage(`Selected ${updatedSelectedCards.length} of ${maxStealableCards} cards to steal.`);
+      }
+
+      return newSelected;
+    });
   };
 
-  const confirmSteal = () => {
-    if (!isStealingMode || selectedCardsToSteal.length === 0) {
-        setMessage("No cards selected to steal or not in stealing mode.");
-        return;
-    }
+  const handleConfirmSwap = () => {
+    const mySelected = selectedCardsToSwap.filter(item => !item.isOpponent);
+    const oppSelected = selectedCardsToSwap.filter(item => item.isOpponent);
 
-    setMessage("Stealing selected cards...");
-    socket.emit('play_card', {
+    const numCardsToSwap = getMaxCardsToSwap();
+
+    if (mySelected.length === numCardsToSwap && oppSelected.length === numCardsToSwap) {
+      setMessage("Confirming swap...");
+      const targetCardIndices = [];
+      for (let i = 0; i < numCardsToSwap; i++) {
+        targetCardIndices.push(mySelected[i].index);
+        targetCardIndices.push(oppSelected[i].index);
+      }
+
+      socket.emit('play_card', {
         room_id: roomId,
         player_id: myPlayerId,
-        card_index: thiefCardPlayedInfo.cardIndex,
-        selected_card_indices_from_opponent: selectedCardsToSteal,
-    });
+        card_index: swapCardPlayedIndex, // Pass the index of the Swap card itself
+        target_character_id: null, // Not applicable for Swap
+        target_card_indices: targetCardIndices,
+      });
+
+      // Reset swap state regardless, as the game_update will reflect actual state
+      setSwapInProgress(false);
+      setSelectedCardsToSwap([]);
+      setSwapCardPlayedIndex(null);
+
+    } else {
+      setMessage(`Please select exactly ${numCardsToSwap} cards from your hand and ${numCardsToSwap} from the opponent's hand.`);
+    }
   };
 
-  const cancelSteal = () => {
-    setIsStealingMode(false);
-    setThiefCardPlayedInfo(null);
-    setOpponentHandRevealed([]);
-    setSelectedCardsToSteal([]); // IMPORTANT: Clear on cancel
-    setMessage("Stealing cancelled.");
-
-    socket.emit('respond_to_theft', {
-        room_id: roomId,
-        player_id: myPlayerId, // The player who used Thief (acting as target for response)
-        response_type: 'thief_cancel',
-        thief_player_id: myPlayerId, 
-        thief_card_index: thiefCardPlayedInfo.cardIndex 
-    });
-  };
-
-  const handlePlayerBeingStolenFromResponse = async (responseType, antiTheftCardIndex = null) => {
-    setMessage("Responding to theft...");
-    socket.emit('respond_to_theft', {
-        room_id: roomId,
-        player_id: myPlayerId,
-        response_type: responseType,
-        anti_theft_card_index: antiTheftCardIndex,
-        thief_player_id: gameState.theft_in_progress ? gameState.theft_in_progress.thief_player_id : null,
-        thief_card_index: gameState.theft_in_progress ? gameState.theft_in_progress.thief_card_index : null,
-    });
+  const handleCancelSwap = () => {
+    setSwapInProgress(false);
+    setSelectedCardsToSwap([]);
+    setSwapCardPlayedIndex(null);
+    setMessage("Card swap cancelled. You can play another card or end your turn.");
   };
 
   const handleEndTurn = () => {
+    // Prevent ending turn if a swap is in progress
+    if (swapInProgress) {
+        setMessage("A card swap is in progress. Please complete or cancel the swap before ending your turn.");
+        return;
+    }
+
     setGameState(prevGameState => {
         if (!prevGameState) return null;
 
-        if (prevGameState.current_turn !== myPlayerId || gameOver || isStealingMode || isUnderTheftAttempt) {
-            setMessage("Not your turn or game is over, or in special action mode.");
+        if (prevGameState.current_turn !== myPlayerId || gameOver) {
+            setMessage("Not your turn or game is over.");
             return prevGameState;
         }
 
@@ -279,11 +286,6 @@ function MultiPlayerGame() {
   };
 
   const handleCharacterClick = (characterId) => {
-    if (isStealingMode || isUnderTheftAttempt) {
-      setMessage("You are in a special action mode. Cannot click characters.");
-      return;
-    }
-
     let character = null;
     character = gameState?.players[myPlayerId]?.characters.find(char => char.id === characterId);
     if (!character) {
@@ -319,12 +321,6 @@ function MultiPlayerGame() {
   const opponentHandSize = opponentPlayer ? opponentPlayer.hand_size : 0;
   const opponentSleepCount = opponentPlayer ? opponentPlayer.sleep_count : 0;
 
-  const maxStealableCardsCalc = 5 - currentPlayerHand.length;
-
-  const availableAntiTheftCards = isUnderTheftAttempt ? 
-    currentPlayerHand.filter(card => card.type === 'anti_theft').map((card) => ({ ...card, originalIndex: currentPlayerHand.indexOf(card) })) : [];
-
-
   return (
     <div className="game-container">
       <div className="game-board-area">
@@ -341,14 +337,7 @@ function MultiPlayerGame() {
             isOpponentZone={true}
             myPlayerId={myPlayerId}
             currentTurnPlayerId={gameState.current_turn}
-            isStealingMode={isStealingMode} 
-            opponentHand={opponentHandRevealed} 
-            onCardSelectedForSteal={handleCardSelectedForSteal}
-            maxStealableCards={maxStealableCards}
-            selectedCardsToStealCount={selectedCardsToSteal.length}
-            selectedOpponentCardIndices={selectedCardsToSteal}
-            isUnderTheftAttempt={isUnderTheftAttempt} 
-            thiefPlayerId={thiefAttackerId}
+            swapInProgress={swapInProgress} // Pass swapInProgress
           />
 
           {/* Current Player Zone */}
@@ -363,9 +352,7 @@ function MultiPlayerGame() {
             isOpponentZone={false}
             myPlayerId={myPlayerId}
             currentTurnPlayerId={gameState.current_turn}
-            isStealingMode={isStealingMode}
-            isUnderTheftAttempt={isUnderTheftAttempt}
-            thiefPlayerId={thiefAttackerId}
+            swapInProgress={swapInProgress} // Pass swapInProgress
           />
 
           {/* Current Player Hand */}
@@ -376,23 +363,50 @@ function MultiPlayerGame() {
                   key={`${index}-${card.name}-${JSON.stringify(card.effect)}`}
                   card={card}
                   index={index}
-                  isDraggable={isMyTurn && !gameOver && !isStealingMode && !isUnderTheftAttempt}
+                  isDraggable={isMyTurn && !gameOver && !swapInProgress} // Cannot drag if swap in progress
                   playerSourceId={myPlayerId}
-                  onClick={handlePlayCardAction}
-                  isStealingMode={isStealingMode}
-                  isSelected={thiefCardPlayedInfo && thiefCardPlayedInfo.cardIndex === index}
-                  isUnderTheftAttempt={isUnderTheftAttempt} 
-                  thiefPlayerId={thiefAttackerId}
+                  onClick={handlePlayCardAction} // Handles Thief and Swap card clicks
+                  isSelectableForSwap={swapInProgress && index !== swapCardPlayedIndex} // Allow selecting if swap is in progress and not the swap card itself
+                  onSelectForSwap={handleSelectCardForSwap}
+                  isSelected={selectedCardsToSwap.some(item => !item.isOpponent && item.index === index)}
                 />
               ))}
             </div>
-            <button 
-              onClick={handleEndTurn} 
-              disabled={!isMyTurn || gameOver || isStealingMode || isUnderTheftAttempt}
-              className="end-turn-button"
-            >
-              End Turn
-            </button>
+
+            {/* Opponent's Hand for Swap Selection */}
+            {swapInProgress && (
+              <div className="opponent-hand-for-swap">
+                <h3>Select {getMaxCardsToSwap()} cards from opponent's hand:</h3>
+                <div className="opponent-hand-cards">
+                  {Array.from({ length: opponentHandSize }).map((_, index) => (
+                    <HandCard
+                      key={`opponent-card-${index}`}
+                      card={{ name: 'Opponent Card', type: 'unknown', description: 'Hidden Card' }} // Display as hidden card
+                      index={index}
+                      isOpponentCard={true}
+                      isDraggable={false}
+                      isSelectableForSwap={swapInProgress} // Allow selection during swap
+                      onSelectForSwap={handleSelectCardForSwap}
+                      isSelected={selectedCardsToSwap.some(item => item.isOpponent && item.index === index)}
+                    />
+                  ))}
+                </div>
+                <div className="swap-buttons">
+                  <button onClick={handleConfirmSwap} disabled={selectedCardsToSwap.filter(item => !item.isOpponent).length !== getMaxCardsToSwap() || selectedCardsToSwap.filter(item => item.isOpponent).length !== getMaxCardsToSwap()}>Confirm Swap</button>
+                  <button onClick={handleCancelSwap} className="cancel-button">Cancel Swap</button>
+                </div>
+              </div>
+            )}
+
+            {!swapInProgress && (
+              <button
+                onClick={handleEndTurn}
+                disabled={!isMyTurn || gameOver}
+                className="end-turn-button"
+              >
+                End Turn
+              </button>
+            )}
           </div>
         </div>
 
@@ -413,53 +427,6 @@ function MultiPlayerGame() {
               </div>
               {gameOver && <h2 className="game-over-message">{winner === myPlayerId ? 'You Won!' : 'Opponent Won!'}</h2>}
               {gameOver && <button onClick={() => navigate('/multiplayer-lobby')} className="restart-button">Back to Lobby</button>}
-
-              {/* Buttons for Thief card stealing mode */}
-              {isStealingMode && (
-                <div className="steal-actions">
-                  <p className="steal-prompt">Select cards to steal ({selectedCardsToSteal.length}/{maxStealableCardsCalc}):</p>
-                  <button onClick={confirmSteal} disabled={selectedCardsToSteal.length === 0}>
-                    Confirm Steal
-                  </button>
-                  <button onClick={cancelSteal}>Cancel Steal</button>
-                </div>
-              )}
-
-              {/* Anti-Theft Response UI */}
-              {isUnderTheftAttempt && (
-                <div className="anti-theft-response-area">
-                    <h3>Theft Attempt!</h3>
-                    <p>{gameState.players[thiefAttackerId].player_name} is trying to steal your cards!</p>
-                    {currentPlayerHand.filter(card => card.type === 'anti_theft').length > 0 ? (
-                        <>
-                            <p>Do you want to use an anti-theft card?</p>
-                            <div className="anti-theft-cards-options">
-                                {/* Use filtered list for display, but original index for click */}
-                                {currentPlayerHand.map((card, idx) => (
-                                    card.type === 'anti_theft' && (
-                                        <HandCard
-                                            key={`anti-theft-${idx}-${card.name}`} 
-                                            card={card}
-                                            index={idx} 
-                                            isDraggable={false}
-                                            playerSourceId={myPlayerId}
-                                            onClick={handlePlayCardAction}
-                                            isStealingMode={false}
-                                            isUnderTheftAttempt={true}
-                                            thiefPlayerId={thiefAttackerId}
-                                        />
-                                    )
-                                ))}
-                            </div>
-                            <button onClick={() => handlePlayerBeingStolenFromResponse('no_response')}>
-                                No, let them steal
-                            </button>
-                        </>
-                    ) : (
-                        <p>You have no anti-theft cards to use. Theft will proceed.</p>
-                    )}
-                </div>
-              )}
           </div>
         </div>
       </div>

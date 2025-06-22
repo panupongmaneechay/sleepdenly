@@ -1,9 +1,10 @@
+// frontend/src/components/PlayerZone.jsx
 import React from 'react';
 import CharacterCard from './CharacterCard';
-import HandCard from './HandCard';
+import HandCard from './HandCard'; // Still needed even if not showing opponent's hand explicitly
 import './PlayerZone.css';
 
-function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick, onCardDrop, isCurrentTurn, isOpponentZone, myPlayerId, currentTurnPlayerId, isStealingMode, opponentHand, onCardSelectedForSteal, maxStealableCards, selectedCardsToStealCount, selectedOpponentCardIndices, isUnderTheftAttempt, thiefPlayerId }) {
+function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick, onCardDrop, isCurrentTurn, isOpponentZone, myPlayerId, currentTurnPlayerId, swapInProgress }) { // Add swapInProgress prop
   const zoneClass = `player-zone ${isCurrentTurn ? 'current-turn-highlight' : ''}`;
   
   return (
@@ -13,9 +14,6 @@ function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick
         <div className="player-stats">
           <p>Slept: <span className="sleep-count">{sleepCount}/3</span></p>
           <p>Cards: <span className="hand-size">{handSize}</span></p>
-          {isStealingMode && isOpponentZone && (
-            <p className="steal-info">Steal: <span className="steal-count">{selectedCardsToStealCount}/{maxStealableCards}</span></p>
-          )}
         </div>
       </div>
       <div className="character-cards-container">
@@ -25,34 +23,12 @@ function PlayerZone({ player, characters, sleepCount, handSize, onCharacterClick
             character={char} 
             onClick={onCharacterClick} 
             onCardDrop={onCardDrop}
-            isDroppable={myPlayerId === currentTurnPlayerId && !char.is_asleep && !isStealingMode && !isUnderTheftAttempt} 
+            isDroppable={myPlayerId === currentTurnPlayerId && !char.is_asleep} 
             targetPlayerId={char.id.includes('player1') ? 'player1' : 'player2'} 
+            swapInProgress={swapInProgress} // Pass swapInProgress
           />
         ))}
       </div>
-
-      {isStealingMode && isOpponentZone && opponentHand && (
-        <div className="opponent-hand-for-steal">
-          <h3>Opponent's Hand:</h3>
-          <div className="player-hand">
-            {opponentHand.map((card, index) => (
-              <HandCard
-                key={`opponent-card-${index}-${card.name}`}
-                card={card}
-                index={index}
-                isDraggable={false} 
-                playerSourceId={isOpponentZone ? currentTurnPlayerId === 'player1' ? 'player2' : 'player1' : myPlayerId} 
-                onClick={onCardSelectedForSteal} 
-                isStealingMode={isStealingMode}
-                isOpponentCard={true}
-                isSelected={selectedOpponentCardIndices.includes(index)} 
-                isUnderTheftAttempt={isUnderTheftAttempt}
-                thiefPlayerId={thiefPlayerId}
-              />
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
