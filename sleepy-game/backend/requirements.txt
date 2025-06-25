@@ -2,3 +2,4 @@ Flask
 Flask-CORS
 Flask-SocketIO
 python-socketio[asyncio_gevent] # For production-ready SocketIO
+eventlet

@@ -1,17 +1,15 @@
-// sleepy-game/frontend/src/pages/MultiPlayerGame.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import io from 'socket.io-client';
+// Removed `io from 'socket.io-client'`
 import CharacterCard from '../components/CharacterCard';
 import HandCard from '../components/HandCard';
 import InformationPanel from '../components/InformationPanel';
 import PlayerZone from '../components/PlayerZone';
 import '../styles/Game.css';
 
-const SOCKET_SERVER_URL = 'http://127.0.0.1:5000';
-const socket = io(SOCKET_SERVER_URL);
+// Removed: const socket = io(SOCKET_SERVER_URL, ...);
 
-function MultiPlayerGame() {
+function MultiPlayerGame({ socket }) { // Receive socket as prop
   const { roomId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -20,62 +18,104 @@ function MultiPlayerGame() {
   const [information, setInformation] = useState({ name: 'N/A', age: 'N/A', description: 'Click on a character for details.' });
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState(null);
-  const [logEntries, setLogEntries] = useState([]); // สถานะใหม่สำหรับเก็บ Log
+  const [logEntries, setLogEntries] = useState([]);
 
   // New states for Swap card logic
   const [swapInProgress, setSwapInProgress] = useState(false);
-  const [selectedCardsToSwap, setSelectedCardsToSwap] = useState([]); // Stores { index, card, isOpponent }
-  const [swapCardPlayedIndex, setSwapCardPlayedIndex] = useState(null); // Stores the index of the 'Swap' card itself
+  const [selectedCardsToSwap, setSelectedCardsToSwap] = useState([]);
+  const [swapCardPlayedIndex, setSwapCardPlayedIndex] = useState(null);
 
   // New states for Defense card logic
-  const [pendingAttackDetails, setPendingAttackDetails] = useState(null); // Stores details of the incoming attack
+  const [pendingAttackDetails, setPendingAttackDetails] = useState(null);
 
-  const myPlayerId = location.state?.playerId;
+  // Initialize myPlayerId from location state if available
+  const [myPlayerId, setMyPlayerId] = useState(location.state?.playerId || null); 
+
+  // Opponent Player ID is derived once myPlayerId is known
   const opponentPlayerId = myPlayerId === 'player1' ? 'player2' : 'player1';
 
   const isMyTurn = gameState && gameState.current_turn === myPlayerId;
-  const isOpponentsTurn = gameState && gameState.current_turn === opponentPlayerId; // New: track opponent's turn
+  const isOpponentsTurn = gameState && gameState.current_turn === opponentPlayerId;
 
-  // Helper to determine maximum cards to swap based on current hand sizes
   const getMaxCardsToSwap = () => {
-    if (!gameState || !myPlayerId) return 0;
-    // Exclude the swap card itself from the count of cards the player has to swap
-    const myHandSizeExcludingSwap = gameState.players[myPlayerId].hand.length - (swapCardPlayedIndex !== null ? 1 : 0);
-    const opponentHandSize = gameState.players[opponentPlayerId].hand_size; // Opponent's hand_size is visible
+    if (!gameState || !myPlayerId || swapCardPlayedIndex === null) return 0; // swapCardPlayedIndex is only set when Swap card is clicked
+    const myHandSizeExcludingSwap = (gameState.players[myPlayerId].hand ? gameState.players[myPlayerId].hand.length : 0) - (swapCardPlayedIndex !== null ? 1 : 0);
+    const opponentHandSize = gameState.players[opponentPlayerId].hand_size;
     return Math.min(myHandSizeExcludingSwap, opponentHandSize);
   };
 
   useEffect(() => {
-    if (!myPlayerId) {
-      setMessage("Error: Player ID not found. Redirecting to lobby.");
-      setTimeout(() => navigate('/multiplayer-lobby'), 2000);
-      return;
+    if (!socket || !roomId) {
+        setMessage("Socket or Room ID not available. Redirecting to lobby.");
+        setTimeout(() => navigate('/multiplayer-lobby'), 2000);
+        return;
     }
 
-    socket.on('connect', () => {
-      console.log('Connected to Socket.IO server for multiplayer.');
+    // No need to call socket.connect() here, it's connected in App.js
+
+    // If initial game state is provided from Lobby, set it
+    if (location.state?.initialGameState && location.state?.playerId) {
+        setGameState(location.state.initialGameState);
+        setMyPlayerId(location.state.playerId);
+        setMessage(location.state.initialGameState.message);
+        setLogEntries(location.state.initialGameState.action_log || []);
+        // Clear location state after using it to avoid re-triggering this on subsequent renders
+        // Note: Direct modification of location.state is not standard React Router. 
+        // A better approach would be to manage game state with a global state manager (Redux, Zustand, Context API).
+        // For simplicity and direct answer, we proceed assuming initial data comes once.
+    }
+    
+    // Listen for game_start event (relevant if refreshing page or direct access)
+    socket.on('game_start', (data) => {
+        console.log("Game: Game start signal received. Setting state.", data);
+        const player1_sid_in_room = data.players_sids.player1.sid;
+        const player2_sid_in_room = data.players_sids.player2.sid;
+        
+        let assignedPlayerId = null;
+        if (socket.id === player1_sid_in_room) {
+            assignedPlayerId = 'player1';
+        } else if (socket.id === player2_sid_in_room) {
+            assignedPlayerId = 'player2';
+        }
+
+        if (assignedPlayerId) {
+            setMyPlayerId(assignedPlayerId);
+            const initialPlayerState = data[`${assignedPlayerId}_game_state`];
+            setGameState(initialPlayerState);
+            setMessage(`Game started! It's ${initialPlayerState.current_turn === assignedPlayerId ? 'your' : 'opponent\'s'} turn.`);
+            setLogEntries(initialPlayerState.action_log || []);
+            setSwapInProgress(initialPlayerState.swap_in_progress || false);
+            setSelectedCardsToSwap(initialPlayerState.selected_cards_for_swap || []);
+            setPendingAttackDetails(initialPlayerState.pending_attack || null);
+        } else {
+            setMessage("Failed to determine player ID from game start data. Returning to lobby.");
+            setTimeout(() => navigate('/multiplayer-lobby'), 2000);
+        }
     });
 
-    socket.on('game_start', (data) => {
-      console.log("Game started!", data);
-      const initialPlayerState = data[`${myPlayerId}_game_state`];
-      setGameState(initialPlayerState);
-      setMessage(`Game started! It's ${data.current_turn === myPlayerId ? 'your' : 'opponent\'s'} turn.`);
-      setLogEntries(initialPlayerState.action_log || []);
-      setSwapInProgress(initialPlayerState.swap_in_progress || false); // Initialize from game state
-      setSelectedCardsToSwap(initialPlayerState.selected_cards_for_swap || []); // Initialize from game state
-      setPendingAttackDetails(initialPlayerState.pending_attack || null); // Initialize from game state
-    });
 
     socket.on('game_update', (data) => {
       console.log("Game update received:", data);
+      if (!myPlayerId) { // Ensure myPlayerId is set before processing update
+          console.warn("myPlayerId not set when game_update received. Waiting for game_start.");
+          // Attempt to infer player ID if not set (fallback, ideally set by game_start)
+          if (socket.id === data.players_sids.player1.sid) {
+              setMyPlayerId('player1');
+          } else if (socket.id === data.players_sids.player2.sid) {
+              setMyPlayerId('player2');
+          } else {
+              console.error("Could not infer myPlayerId from game_update. Disconnecting.");
+              socket.disconnect(); // Disconnect if cannot infer player ID
+              navigate('/multiplayer-lobby');
+              return;
+          }
+      }
       const updatedPlayerState = data[`${myPlayerId}_game_state`];
       setGameState(updatedPlayerState);
 
-      // Update swapInProgress and selectedCardsToSwap from gameState
       setSwapInProgress(updatedPlayerState.swap_in_progress || false);
       setSelectedCardsToSwap(updatedPlayerState.selected_cards_for_swap || []);
-      setPendingAttackDetails(updatedPlayerState.pending_attack || null); // Update pending attack details
+      setPendingAttackDetails(updatedPlayerState.pending_attack || null);
 
       if (data.win_status.game_over) {
         setGameOver(true);
@@ -96,24 +136,22 @@ function MultiPlayerGame() {
       setMessage(`Game Error: ${data.message}`);
     });
 
+    // Clean up on component unmount
     return () => {
-      socket.disconnect();
-      socket.off('connect');
-      socket.off('game_start');
+      // Don't disconnect socket here, it's managed by App.js
+      socket.off('game_start'); // Turn off only listeners specific to this component
       socket.off('game_update');
       socket.off('player_disconnected');
       socket.off('error');
     };
-  }, [roomId, myPlayerId, opponentPlayerId, navigate]);
+  }, [roomId, navigate, socket, myPlayerId, location.state]); // Add socket and myPlayerId to dependencies
+  // Make sure myPlayerId is updated from game_start event, not just location state
 
   const handleCardDrop = (cardIndex, targetCharacterId, cardType, targetPlayerIdOfChar, playingPlayerId) => {
-    // Prevent actions if a swap is in progress
     if (swapInProgress) {
         setMessage("A card swap is in progress. Please select cards to swap or cancel.");
         return;
     }
-
-    // Prevent playing cards if there's a pending attack that needs defense
     if (pendingAttackDetails) {
         setMessage("An opponent's action is pending defense. Please decide to use a Defense card or not.");
         return;
@@ -121,28 +159,15 @@ function MultiPlayerGame() {
 
     setGameState(prevGameState => {
         if (!prevGameState) return null;
-
         if (prevGameState.current_turn !== playingPlayerId || gameOver) {
             setMessage("Not your turn or game over.");
             return prevGameState;
         }
 
-        // Thief card cannot be dropped on a character, it's used by clicking
-        if (cardType === 'theif') {
-          setMessage("Thief card cannot be dropped on a character. Click the card to use it.");
+        if (cardType === 'theif' || cardType === 'swap' || cardType === 'defense') {
+          setMessage("This card cannot be dropped on a character. Click the card to use it.");
           return prevGameState;
         }
-        // Swap card cannot be dropped on a character either
-        if (cardType === 'swap') {
-            setMessage("Swap card cannot be dropped on a character. Click the card to use it.");
-            return prevGameState;
-        }
-        // Defense card cannot be dropped on a character
-        if (cardType === 'defense') {
-            setMessage("Defense card cannot be dropped on a character. It activates automatically when attacked or can be clicked to resolve.");
-            return prevGameState;
-        }
-
 
         setMessage("Playing card...");
         socket.emit('play_card', {
@@ -150,8 +175,8 @@ function MultiPlayerGame() {
             player_id: playingPlayerId,
             card_index: cardIndex,
             target_character_id: targetCharacterId,
-            target_card_indices: null, // Ensure this is null for non-swap cards
-            defendingCardIndex: null, // Not defending now
+            target_card_indices: null,
+            defendingCardIndex: null,
         });
         return prevGameState;
     });
@@ -160,19 +185,14 @@ function MultiPlayerGame() {
   const handlePlayCardAction = (cardIndex, cardType) => {
     setGameState(prevGameState => {
         if (!prevGameState) return null;
-
         if (prevGameState.current_turn !== myPlayerId || gameOver) {
             setMessage("Not your turn or game over.");
             return prevGameState;
         }
-
-        // If a swap is already in progress, prevent playing other cards
         if (swapInProgress) {
             setMessage("A card swap is in progress. Please select cards to swap or cancel.");
             return prevGameState;
         }
-
-        // Prevent playing cards if there's a pending attack that needs defense
         if (pendingAttackDetails) {
             setMessage("An opponent's action is pending defense. Please decide to use a Defense card or not.");
             return prevGameState;
@@ -186,12 +206,11 @@ function MultiPlayerGame() {
                 card_index: cardIndex,
                 target_character_id: null,
                 target_card_indices: null,
-                defendingCardIndex: null, // Not defending now
+                defendingCardIndex: null,
             });
             return prevGameState;
         }
 
-        // Handle Swap card activation
         if (cardType === 'swap') {
             const myHandSizeExcludingSwap = prevGameState.players[myPlayerId].hand.length - 1;
             const opponentHandSize = prevGameState.players[opponentPlayerId].hand_size;
@@ -202,13 +221,12 @@ function MultiPlayerGame() {
             }
 
             setSwapInProgress(true);
-            setSwapCardPlayedIndex(cardIndex); // Store the index of the Swap card
-            setSelectedCardsToSwap([]); // Reset any previous selections
+            setSwapCardPlayedIndex(cardIndex);
+            setSelectedCardsToSwap([]);
             setMessage(`Select up to ${Math.min(myHandSizeExcludingSwap, opponentHandSize)} of your cards and an equal number of opponent's cards to swap. Click the Confirm Swap button.`);
-            return { ...prevGameState, swap_in_progress: true }; // Update game state immediately to reflect swap mode
+            return { ...prevGameState, swap_in_progress: true };
         }
 
-        // Defense card cannot be "played" like other cards, it's selected during an incoming attack
         if (cardType === 'defense') {
             setMessage("Defense cards are used when an opponent plays an action on you. You will be prompted to use it then.");
             return prevGameState;
@@ -229,18 +247,15 @@ function MultiPlayerGame() {
       let newSelected = [...prevSelected];
 
       if (existingSelectionIndex !== -1) {
-        // Card already selected, unselect it
         newSelected.splice(existingSelectionIndex, 1);
       } else {
-        // Card not selected, select it if count allows
         const mySelectedCount = newSelected.filter(item => !item.isOpponent).length;
         const oppSelectedCount = newSelected.filter(item => item.isOpponent).length;
 
         if (isOpponent && oppSelectedCount < currentSwapCount) {
           newSelected.push({ index: cardIndex, card, isOpponent });
         } else if (!isOpponent && mySelectedCount < currentSwapCount) {
-          // Ensure the selected card is not the Swap card itself
-          if (cardIndex !== swapCardPlayedIndex || isOpponent) { // If it's my card, ensure it's not the swap card
+          if (cardIndex !== swapCardPlayedIndex || isOpponent) {
               newSelected.push({ index: cardIndex, card, isOpponent });
           } else {
               setMessage("You cannot select the Swap card itself for the swap.");
@@ -263,21 +278,19 @@ function MultiPlayerGame() {
     if (mySelected.length === numCardsToSwap && oppSelected.length === numCardsToSwap) {
       setMessage("Confirming swap...");
       const targetCardIndices = [];
-      for (let i = 0; i < numCardsToSwap; i++) {
-        targetCardIndices.push(mySelected[i].index);
-        targetCardIndices.push(oppSelected[i].index);
-      }
+      mySelected.forEach(item => targetCardIndices.push(item.index));
+      oppSelected.forEach(item => targetCardIndices.push(item.index));
+
 
       socket.emit('play_card', {
         room_id: roomId,
         player_id: myPlayerId,
-        card_index: swapCardPlayedIndex, // Pass the index of the Swap card itself
-        target_character_id: null, // Not applicable for Swap
+        card_index: swapCardPlayedIndex,
+        target_character_id: null,
         target_card_indices: targetCardIndices,
-        defendingCardIndex: null, // Not defending now
+        defendingCardIndex: null,
       });
 
-      // Reset swap state regardless, as the game_update will reflect actual state
       setSwapInProgress(false);
       setSelectedCardsToSwap([]);
       setSwapCardPlayedIndex(null);
@@ -292,13 +305,10 @@ function MultiPlayerGame() {
     setSelectedCardsToSwap([]);
     setSwapCardPlayedIndex(null);
     setMessage("Card swap cancelled. You can play another card or end your turn.");
-    // If a swap was initiated but cancelled, the turn should still be for the player who initiated it
-    // The game state will be updated by the server to reflect the cancellation.
   };
 
-  // --- Defense Card Handlers ---
   const handleDefendAction = (useDefense, defendingCardIndex = null) => {
-    if (!pendingAttackDetails) return; // Should not happen
+    if (!pendingAttackDetails) return;
 
     setMessage("Resolving opponent's action...");
     socket.emit('resolve_pending_attack', {
@@ -308,16 +318,14 @@ function MultiPlayerGame() {
       defendingCardIndex: defendingCardIndex,
     });
 
-    setPendingAttackDetails(null); // Clear pending attack details
+    setPendingAttackDetails(null);
   };
 
   const handleEndTurn = () => {
-    // Prevent ending turn if a swap is in progress
     if (swapInProgress) {
         setMessage("A card swap is in progress. Please complete or cancel the swap before ending your turn.");
         return;
     }
-    // Prevent ending turn if there's a pending attack that needs defense
     if (pendingAttackDetails) {
         setMessage("An opponent's action is pending defense. Please decide to use a Defense card or not.");
         return;
@@ -325,7 +333,6 @@ function MultiPlayerGame() {
 
     setGameState(prevGameState => {
         if (!prevGameState) return null;
-
         if (prevGameState.current_turn !== myPlayerId || gameOver) {
             setMessage("Not your turn or game is over.");
             return prevGameState;
@@ -356,7 +363,12 @@ function MultiPlayerGame() {
     }
   };
 
-  if (!gameState) {
+  // Ensure currentPlayer and opponentPlayer are safely accessed only when gameState is not null
+  const currentPlayer = gameState ? gameState.players[myPlayerId] : null;
+  const opponentPlayer = gameState ? gameState.players[opponentPlayerId] : null;
+
+  // Render loading state if gameState or myPlayerId is not yet available
+  if (!gameState || !myPlayerId) {
     return (
       <div className="game-container loading">
         <p>{message}</p>
@@ -364,9 +376,6 @@ function MultiPlayerGame() {
       </div>
     );
   }
-
-  const currentPlayer = gameState.players[myPlayerId];
-  const opponentPlayer = gameState.players[opponentPlayerId];
 
   const currentPlayerCharacters = currentPlayer ? currentPlayer.characters : [];
   const currentPlayerHand = currentPlayer ? currentPlayer.hand : [];
@@ -393,7 +402,7 @@ function MultiPlayerGame() {
             isOpponentZone={true}
             myPlayerId={myPlayerId}
             currentTurnPlayerId={gameState.current_turn}
-            swapInProgress={swapInProgress} // Pass swapInProgress
+            swapInProgress={swapInProgress}
           />
 
           {/* Current Player Zone */}
@@ -408,7 +417,7 @@ function MultiPlayerGame() {
             isOpponentZone={false}
             myPlayerId={myPlayerId}
             currentTurnPlayerId={gameState.current_turn}
-            swapInProgress={swapInProgress} // Pass swapInProgress
+            swapInProgress={swapInProgress}
           />
 
           {/* Current Player Hand */}
@@ -421,7 +430,7 @@ function MultiPlayerGame() {
                   index={index}
                   isDraggable={isMyTurn && !gameOver && !swapInProgress && !pendingAttackDetails} 
                   playerSourceId={myPlayerId}
-                  onClick={handlePlayCardAction} // Handles Thief and Swap card clicks
+                  onClick={handlePlayCardAction}
                   isSelectableForSwap={swapInProgress && index !== swapCardPlayedIndex} 
                   onSelectForSwap={handleSelectCardForSwap}
                   isSelected={selectedCardsToSwap.some(item => !item.isOpponent && item.index === index)}
@@ -440,11 +449,11 @@ function MultiPlayerGame() {
                   {Array.from({ length: opponentHandSize }).map((_, index) => (
                     <HandCard
                       key={`opponent-card-${index}`}
-                      card={{ name: 'Opponent Card', type: 'unknown', description: 'Hidden Card' }} // Display as hidden card
+                      card={{ name: 'Opponent Card', type: 'unknown', description: 'Hidden Card' }}
                       index={index}
                       isOpponentCard={true}
                       isDraggable={false}
-                      isSelectableForSwap={swapInProgress} // Allow selection during swap
+                      isSelectableForSwap={swapInProgress}
                       onSelectForSwap={handleSelectCardForSwap}
                       isSelected={selectedCardsToSwap.some(item => item.isOpponent && item.index === index)}
                     />

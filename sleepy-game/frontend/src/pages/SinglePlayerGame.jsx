@@ -50,12 +50,13 @@ function SinglePlayerGame() {
       setSelectedCardsToSwap(gameState.selected_cards_for_swap || []);
       setPendingAttackDetails(gameState.pending_attack || null); // Update pending attack details
 
-      if (gameState.game_over) {
+      // Bot moves only if no pending attack and it's its turn
+      if (gameState.current_turn === botPlayerId && !gameOver && !gameState.pending_attack) {
+        setTimeout(handleBotMove, 1500);
+      } else if (gameState.game_over) {
         setGameOver(true);
         setWinner(gameState.winner);
         setMessage(`${gameState.winner === myPlayerId ? 'You' : 'AI'} win!`);
-      } else if (gameState.current_turn === botPlayerId && !gameOver && !pendingAttackDetails) { // Bot moves only if no pending attack
-        setTimeout(handleBotMove, 1500);
       }
     }
   }, [gameState, gameOver, myPlayerId, botPlayerId, swapInProgress, pendingAttackDetails]); // Added pendingAttackDetails to dependencies
@@ -272,10 +273,9 @@ function SinglePlayerGame() {
     if (mySelected.length === numCardsToSwap && oppSelected.length === numCardsToSwap) {
       setMessage("Confirming swap...");
       const targetCardIndices = [];
-      for (let i = 0; i < numCardsToSwap; i++) {
-        targetCardIndices.push(mySelected[i].index);
-        targetCardIndices.push(oppSelected[i].index);
-      }
+      // Combine indices, my cards first, then opponent's cards
+      mySelected.forEach(item => targetCardIndices.push(item.index));
+      oppSelected.forEach(item => targetCardIndices.push(item.index));
 
       try {
         const response = await axios.post(`${API_BASE_URL}/game/apply_card`, {
