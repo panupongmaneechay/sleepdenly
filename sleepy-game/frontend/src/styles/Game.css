@@ -317,3 +317,54 @@ body.dark-mode .opponent-hand-for-swap h3 {
 .swap-buttons button.cancel-button:hover {
     background-color: #c82333;
 }
+
+/* New: Defense prompt container */
+.defense-prompt-container {
+    background-color: #e0eaf2; /* Light blue-grey */
+    border: 2px solid #007bff;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 15px;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+body.dark-mode .defense-prompt-container {
+    background-color: #1c2c3a;
+    border-color: #87CEEB;
+}
+
+.defense-prompt-container h3 {
+    margin-top: 0;
+    color: #007bff;
+    margin-bottom: 10px;
+}
+body.dark-mode .defense-prompt-container h3 {
+    color: #87CEEB;
+}
+
+.defense-prompt-container p {
+    margin-bottom: 15px;
+}
+
+.defense-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.defense-actions button {
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.defense-actions button:first-child { /* Use Defense button */
+    background-color: #17a2b8; /* Info blue */
+    color: white;
+}
+.defense-actions button:first-child:hover {
+    background-color: #138496;
+}

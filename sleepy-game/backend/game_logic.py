@@ -88,7 +88,8 @@ ACTION_CARD_TEMPLATES = [
     {"name": "Stop_using_phone", "type": "support", "effect": {"type": "add_sleep", "value": 3}, "description": "Avoiding screens before bed improves sleep.", "cssClass": "card-support", "rarity": 1.0},
     {"name": "Lucky", "type": "lucky", "effect": {"type": "force_sleep"}, "description": "Force your character to sleep instantly!", "cssClass": "card-lucky", "rarity": 0.2},
     {"name": "Theif", "type": "theif", "effect": {"type": "steal_cards"}, "description": "Steal all cards from your opponent's hand!", "cssClass": "card-theif", "rarity": 0.1}, # Reduced rarity for Thief to be less common
-    {"name": "Swap", "type": "swap", "effect": {"type": "swap_cards"}, "description": "Swap cards with your opponent!", "cssClass": "card-swap", "rarity": 10.3}, # New Swap Card
+    {"name": "Swap", "type": "swap", "effect": {"type": "swap_cards"}, "description": "Swap cards with your opponent!", "cssClass": "card-swap", "rarity": 0.3}, # New Swap Card
+    {"name": "Defense_Card", "type": "defense", "effect": {"type": "nullify_action"}, "description": "Nullifies an opponent's action against you!", "cssClass": "card-defense", "rarity": 0.5}, # New Defense Card
 ]
 
 def generate_character_id(player_num, char_index):
@@ -101,13 +102,15 @@ def initialize_game():
                 "characters": [],
                 "hand": [],
                 "sleep_count": 0,
-                "player_name": "Player 1"
+                "player_name": "Player 1",
+                "has_defense_card_in_hand": False # New state for defense card
             },
             "player2": {
                 "characters": [],
                 "hand": [],
                 "sleep_count": 0,
-                "player_name": "Player 2"
+                "player_name": "Player 2",
+                "has_defense_card_in_hand": False # New state for defense card
             }
         },
         "current_turn": "player1",
@@ -115,7 +118,8 @@ def initialize_game():
         "game_over": False,
         "winner": None,
         "theft_in_progress": None, # Removed theft interaction, this can be simplified or removed if not used elsewhere
-        "action_log": []
+        "action_log": [],
+        "pending_attack": None, # To store details of an incoming attack
     }
 
     all_characters = list(CHARACTER_TEMPLATES)
@@ -175,6 +179,9 @@ def draw_cards_for_player(game_state, player_id):
         card_template = random.choice(weighted_cards)
         player["hand"].append(card_template)
     
+    # Update has_defense_card_in_hand status after drawing cards
+    player["has_defense_card_in_hand"] = any(card["type"] == "defense" for card in player["hand"])
+
     return game_state
 
 def get_player_id_from_character_id(character_id):
@@ -212,10 +219,113 @@ def steal_all_cards_from_opponent(game_state, playing_player_id):
 
     game_state["message"] = log_message
     game_state["action_log"].append(log_message)
+
+    # Update has_defense_card_in_hand status for both players
+    game_state["players"][playing_player_id]["has_defense_card_in_hand"] = any(card["type"] == "defense" for card in game_state["players"][playing_player_id]["hand"])
+    game_state["players"][opponent_player_id]["has_defense_card_in_hand"] = any(card["type"] == "defense" for card in game_state["players"][opponent_player_id]["hand"])
     
     return game_state, stolen_count
 
-def apply_card_effect(game_state, playing_player_id, card_index, target_character_id=None, target_card_indices=None):
+# New function to apply a pending action (used after defense check)
+def apply_pending_action(game_state, playing_player_id, card_data, target_character_id=None, target_card_indices=None):
+    player_name = game_state['players'][playing_player_id]['player_name']
+    opponent_player_id = "player1" if playing_player_id == "player2" else "player2"
+    opponent_name = game_state['players'][opponent_player_id]['player_name']
+
+    log_message = ""
+
+    if card_data["type"] == "attack":
+        target_player_id = get_player_id_from_character_id(target_character_id)
+        target_character = None
+        for char in game_state["players"][target_player_id]["characters"]:
+            if char["id"] == target_character_id:
+                target_character = char
+                break
+        
+        target_character["current_sleep"] += card_data["effect"]["value"]
+        log_message = f"{player_name} used {card_data['name']} on {target_character['name']} to reduce sleep by {-card_data['effect']['value']} hours."
+        # Cap current_sleep at 0 (cannot go below 0)
+        if target_character["current_sleep"] < 0:
+            target_character["current_sleep"] = 0
+        # A character only goes to sleep if current_sleep is EXACTLY max_sleep
+        if target_character["current_sleep"] == target_character["max_sleep"] and not target_character["is_asleep"]:
+            target_character["is_asleep"] = True
+            game_state["players"][target_player_id]["sleep_count"] += 1
+            log_message += f" {target_character['name']} reached enough sleep and is now asleep!"
+
+    elif card_data["type"] == "support":
+        target_player_id = get_player_id_from_character_id(target_character_id)
+        target_character = None
+        for char in game_state["players"][target_player_id]["characters"]:
+            if char["id"] == target_character_id:
+                target_character = char
+                break
+
+        target_character["current_sleep"] += card_data["effect"]["value"]
+        log_message = f"{player_name} used {card_data['name']} on {target_character['name']} to add {card_data['effect']['value']} hours of sleep."
+        # A character only goes to sleep if current_sleep is EXACTLY max_sleep
+        if target_character["current_sleep"] == target_character["max_sleep"] and not target_character["is_asleep"]:
+            target_character["is_asleep"] = True
+            game_state["players"][target_player_id]["sleep_count"] += 1
+            log_message += f" {target_character['name']} reached enough sleep and is now asleep!"
+
+    elif card_data["type"] == "lucky":
+        target_player_id = get_player_id_from_character_id(target_character_id)
+        target_character = None
+        for char in game_state["players"][target_player_id]["characters"]:
+            if char["id"] == target_character_id:
+                target_character = char
+                break
+
+        target_character["current_sleep"] = target_character["max_sleep"]
+        log_message = f"{player_name} used {card_data['name']} on {target_character['name']} for instant sleep!"
+
+    elif card_data["type"] == "theif":
+        game_state, stolen_count = steal_all_cards_from_opponent(game_state, playing_player_id)
+        log_message = f"{player_name} used {card_data['name']}! {game_state['message']}"
+
+    elif card_data["type"] == "swap":
+        player = game_state["players"][playing_player_id]
+        opponent_hand = game_state["players"][opponent_player_id]["hand"]
+        num_cards_to_swap = len(target_card_indices) // 2
+        
+        my_chosen_indices = []
+        opp_chosen_indices = []
+        for i in range(num_cards_to_swap):
+            my_chosen_indices.append(target_card_indices[i * 2])
+            opp_chosen_indices.append(target_card_indices[i * 2 + 1])
+        
+        my_chosen_indices.sort(reverse=True)
+        opp_chosen_indices.sort(reverse=True)
+
+        swapped_cards_player = []
+        swapped_cards_opponent = []
+
+        for i in range(num_cards_to_swap):
+            my_card = player["hand"].pop(my_chosen_indices[i])
+            opponent_card = opponent_hand.pop(opp_chosen_indices[i])
+            
+            player["hand"].append(opponent_card)
+            opponent_hand.append(my_card)
+            
+            swapped_cards_player.append(my_card['name'])
+            swapped_cards_opponent.append(opponent_card['name'])
+
+        log_message = f"{player_name} used {card_data['name']} and swapped {num_cards_to_swap} card(s). " \
+                      f"{player_name} gave: {', '.join(swapped_cards_player)}. " \
+                      f"{player_name} received: {', '.join(swapped_cards_opponent)}."
+        game_state["players"][playing_player_id]["has_defense_card_in_hand"] = any(card["type"] == "defense" for card in player["hand"])
+        game_state["players"][opponent_player_id]["has_defense_card_in_hand"] = any(card["type"] == "defense" for card in opponent_hand)
+    else:
+        raise ValueError("Unknown card type in pending action.")
+
+    game_state["message"] = log_message
+    game_state["action_log"].append(game_state["message"])
+    game_state["pending_attack"] = None # Clear pending attack after it's applied or nullified
+    return game_state
+
+
+def apply_card_effect(game_state, playing_player_id, card_index, target_character_id=None, target_card_indices=None, defending_card_index=None):
     player = game_state["players"][playing_player_id]
     opponent_player_id = "player1" if playing_player_id == "player2" else "player2"
     opponent_hand = game_state["players"][opponent_player_id]["hand"]
@@ -227,11 +337,42 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
 
     card = player["hand"][card_index]
 
+    # --- Handle Defense Card usage ---
+    if defending_card_index is not None:
+        if game_state["pending_attack"] is None:
+            raise ValueError("No incoming attack to defend against.")
+        if card["type"] != "defense":
+            raise ValueError("Only a Defense card can be used to defend.")
+        if playing_player_id != game_state["pending_attack"]["target_player_id"]:
+             raise ValueError("You can only use a Defense card when you are the target of an action.")
+
+        # Remove the used Defense card from the defender's hand
+        player["hand"].pop(defending_card_index)
+        # The attacking card is also nullified, so no need to apply its effect.
+        # The attacking card is considered "used" and should be removed by the attacker's logic
+        # or by a specific instruction after defense is confirmed.
+
+        log_message = f"{player_name} used {card['name']} to nullify {game_state['pending_attack']['card_name']}'s effect!"
+        game_state["message"] = log_message
+        game_state["action_log"].append(log_message)
+        game_state["pending_attack"] = None # Clear pending attack
+        player["has_defense_card_in_hand"] = any(c["type"] == "defense" for c in player["hand"]) # Update defense card status
+        return game_state
+
+    # --- Logic for playing other card types ---
+
+    # For attack, support, and lucky cards, a target character is required
+    if card["type"] in ["attack", "support", "lucky"] and target_character_id is None:
+        raise ValueError("Target character ID is required for this card type.")
+
     # Handle playing a Thief card
     if card["type"] == "theif":
-        player["hand"].pop(card_index) # Remove the thief card immediately
+        # Remove the played card from hand immediately
+        player["hand"].pop(card_index)
         game_state, stolen_count = steal_all_cards_from_opponent(game_state, playing_player_id)
-        game_state["message"] = f"{player_name} used {card['name']}! {game_state['message']}"
+        # Update has_defense_card_in_hand for both players after theft
+        player["has_defense_card_in_hand"] = any(c["type"] == "defense" for c in player["hand"])
+        game_state["players"][opponent_player_id]["has_defense_card_in_hand"] = any(c["type"] == "defense" for c in game_state["players"][opponent_player_id]["hand"])
         return game_state
     
     # Handle playing a Swap card
@@ -247,52 +388,32 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
         if target_card_indices is None or len(target_card_indices) != num_cards_to_swap * 2:
             raise ValueError(f"Invalid target card indices for Swap. Expected {num_cards_to_swap * 2} indices.")
 
-        # target_card_indices will be an array like [myCardIndex1, oppCardIndex1, myCardIndex2, oppCardIndex2, ...]
-        
-        # Extract player's chosen cards and opponent's chosen cards
-        my_chosen_indices = []
-        opp_chosen_indices = []
-        for i in range(num_cards_to_swap):
-            my_chosen_indices.append(target_card_indices[i * 2])
-            opp_chosen_indices.append(target_card_indices[i * 2 + 1])
-        
-        # Sort indices in descending order to avoid issues when popping
-        my_chosen_indices.sort(reverse=True)
-        opp_chosen_indices.sort(reverse=True)
+        # Remove the swap card from hand
+        player["hand"].pop(card_index) # Remove the swap card now
 
-        swapped_cards_player = []
-        swapped_cards_opponent = []
+        # Store pending action to allow defense
+        game_state["pending_attack"] = {
+            "card_name": card["name"],
+            "card_type": card["type"],
+            "player_id": playing_player_id,
+            "target_player_id": opponent_player_id, # Target is the opponent for swap
+            "target_character_id": None,
+            "target_card_indices": target_card_indices,
+            "original_card_index": card_index # Store original index for potential re-draw if nullified (though not implemented here)
+        }
 
-        # Perform the swap
-        for i in range(num_cards_to_swap):
-            my_card = player["hand"].pop(my_chosen_indices[i])
-            opponent_card = opponent_hand.pop(opp_chosen_indices[i])
-            
-            player["hand"].append(opponent_card)
-            opponent_hand.append(my_card)
-            
-            swapped_cards_player.append(my_card['name'])
-            swapped_cards_opponent.append(opponent_card['name'])
+        # Check if the opponent has a defense card
+        if game_state["players"][opponent_player_id]["has_defense_card_in_hand"]:
+            game_state["message"] = f"{opponent_name} has a Defense Card! Waiting for their response."
+            game_state["action_log"].append(game_state["message"])
+            game_state["swap_in_progress"] = True # Keep swap active until defense is resolved
+            return game_state
+        else: # No defense card, apply effect immediately
+            game_state["swap_in_progress"] = False # No defense, end swap process
+            return apply_pending_action(game_state, playing_player_id, card, None, target_card_indices) # Apply the swap effect
 
-        player["hand"].pop(card_index if card_index < len(player["hand"]) else card_index - num_cards_to_swap) # Remove the swap card
-
-        log_message = f"{player_name} used {card['name']} and swapped {num_cards_to_swap} card(s). " \
-                      f"{player_name} gave: {', '.join(swapped_cards_player)}. " \
-                      f"{player_name} received: {', '.join(swapped_cards_opponent)}."
-        
-        game_state["message"] = log_message
-        game_state["action_log"].append(log_message)
-        game_state["swap_in_progress"] = False # End the swap process
-        return game_state
-
-    # For other card types, a target character is required
-    if target_character_id is None:
-        raise ValueError("Target character ID is required for this card type.")
-
+    # For attack, support, lucky cards, check if target is protected
     target_player_id = get_player_id_from_character_id(target_character_id)
-    if not target_player_id:
-        raise ValueError("Invalid target character ID.")
-
     target_character = None
     for char in game_state["players"][target_player_id]["characters"]:
         if char["id"] == target_character_id:
@@ -304,49 +425,42 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
 
     if target_character["is_asleep"]:
         raise ValueError("Target character is already asleep and cannot be affected by this card.")
-    
-    # Remove the played card from hand
+
+    # Special handling for Lucky card (can only be used on own characters)
+    if card["type"] == "lucky" and target_player_id != playing_player_id:
+        raise ValueError("Lucky Sleep card can only be used on your own characters.")
+
+    # Store pending attack for defense consideration
+    game_state["pending_attack"] = {
+        "card_name": card["name"],
+        "card_type": card["type"],
+        "effect_value": card["effect"].get("value"),
+        "player_id": playing_player_id,
+        "target_player_id": target_player_id,
+        "target_character_id": target_character_id,
+        "original_card_index": card_index
+    }
+
+    # Remove the played card from hand (it's now "in play" as a pending attack)
     player["hand"].pop(card_index)
-    
-    log_message = ""
+    player["has_defense_card_in_hand"] = any(c["type"] == "defense" for c in player["hand"]) # Update defense card status
 
-    if card["type"] == "attack":
-        target_character["current_sleep"] += card["effect"]["value"]
-        log_message = f"{player_name} used {card['name']} on {target_character['name']} to reduce sleep by {-card['effect']['value']} hours."
+    # Check if the target player has a defense card
+    if game_state["players"][target_player_id]["has_defense_card_in_hand"] and target_player_id == opponent_player_id:
+        game_state["message"] = f"{opponent_name} has a Defense Card! Waiting for their response."
+        game_state["action_log"].append(game_state["message"])
+        return game_state
+    else: # No defense card or not an opponent's turn to defend, apply effect immediately
+        return apply_pending_action(game_state, playing_player_id, card, target_character_id)
 
-    elif card["type"] == "support":
-        target_character["current_sleep"] += card["effect"]["value"]
-        log_message = f"{player_name} used {card['name']} on {target_character['name']} to add {card['effect']['value']} hours of sleep."
-
-    elif card["type"] == "lucky":
-        if target_player_id != playing_player_id:
-            raise ValueError("Lucky Sleep card can only be used on your own characters.")
-        
-        target_character["current_sleep"] = target_character["max_sleep"]
-        log_message = f"{player_name} used {card['name']} on {target_character['name']} for instant sleep!"
-    
-    else:
-        raise ValueError("Unknown card type.")
-
-    # Cap current_sleep at 0 (cannot go below 0)
-    if target_character["current_sleep"] < 0:
-        target_character["current_sleep"] = 0
-
-    # A character only goes to sleep if current_sleep is EXACTLY max_sleep
-    if target_character["current_sleep"] == target_character["max_sleep"] and not target_character["is_asleep"]:
-        target_character["is_asleep"] = True
-        game_state["players"][target_player_id]["sleep_count"] += 1
-        if card["type"] not in ["lucky"]: # Lucky already has its own message
-            log_message += f" {target_character['name']} reached enough sleep and is now asleep!"
-        
-    game_state["message"] = log_message
-    game_state["action_log"].append(game_state["message"])
-    return game_state
 
 def end_turn(game_state, player_id):
     if game_state["current_turn"] != player_id:
         raise ValueError("It's not your turn to end.")
     
+    if game_state["pending_attack"]:
+        raise ValueError("Cannot end turn while an action is pending defense.")
+
     # Player only draws cards if their hand size is less than MAX_HAND_SIZE
     draw_cards_for_player(game_state, player_id)
 
@@ -389,13 +503,15 @@ def get_game_state_for_player(full_game_state, player_id_for_view):
                 "characters": full_game_state["players"][player1_id]["characters"],
                 "sleep_count": full_game_state["players"][player1_id]["sleep_count"],
                 "hand_size": len(full_game_state["players"][player1_id]["hand"]),
-                "player_name": full_game_state["players"][player1_id]["player_name"]
+                "player_name": full_game_state["players"][player1_id]["player_name"],
+                "has_defense_card_in_hand": full_game_state["players"][player1_id]["has_defense_card_in_hand"]
             },
             "player2": {
                 "characters": full_game_state["players"][player2_id]["characters"],
                 "sleep_count": full_game_state["players"][player2_id]["sleep_count"],
                 "hand_size": len(full_game_state["players"][player2_id]["hand"]),
-                "player_name": full_game_state["players"][player2_id]["player_name"]
+                "player_name": full_game_state["players"][player2_id]["player_name"],
+                "has_defense_card_in_hand": full_game_state["players"][player2_id]["has_defense_card_in_hand"]
             }
         },
         "current_turn": full_game_state["current_turn"],
@@ -405,7 +521,8 @@ def get_game_state_for_player(full_game_state, player_id_for_view):
         "theft_in_progress": None, # Always None as theft is instant now
         "action_log": full_game_state["action_log"],
         "swap_in_progress": full_game_state.get("swap_in_progress", False), # Track if swap is in progress
-        "selected_cards_for_swap": full_game_state.get("selected_cards_for_swap", []) # Track selected cards for swap
+        "selected_cards_for_swap": full_game_state.get("selected_cards_for_swap", []), # Track selected cards for swap
+        "pending_attack": full_game_state.get("pending_attack"), # Pass pending attack details
     }
 
     # Only reveal hand to the player who owns it

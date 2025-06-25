@@ -186,6 +186,26 @@ body.dark-mode .hand-card.card-swap .card-effect {
   color: #EE82EE;
 }
 
+/* New: Defense Card Style */
+.hand-card.card-defense {
+  border-color: #00BCD4; /* Cyan */
+  background-color: #e0f7fa; /* Light cyan */
+  color: #006064;
+  box-shadow: 0 0 10px rgba(0, 188, 212, 0.5);
+}
+body.dark-mode .hand-card.card-defense {
+  border-color: #00FFFF; /* Aqua */
+  background-color: #1a4f52;
+  color: #b2ebf2;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.7);
+}
+.hand-card.card-defense .card-effect {
+  color: #00BCD4;
+}
+body.dark-mode .hand-card.card-defense .card-effect {
+  color: #00FFFF;
+}
+
 
 /* Style for hidden opponent cards */
 .hand-card.opponent-hidden {
@@ -234,4 +254,15 @@ body.dark-mode .hand-card.selectable-for-swap {
 body.dark-mode .hand-card.selected-for-swap {
     border-color: #ff69b4; /* HotPink */
     box-shadow: 0 0 10px rgba(255, 105, 180, 0.9);
+}
+
+/* New: Style for cards that can be selected for defense (Defense cards only) */
+.hand-card.selectable-for-defense {
+    cursor: pointer;
+    border: 3px solid #00BCD4; /* Cyan solid border for defense selection */
+    box-shadow: 0 0 15px rgba(0, 188, 212, 0.9);
+}
+body.dark-mode .hand-card.selectable-for-defense {
+    border-color: #00FFFF; /* Aqua */
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.9);
 }

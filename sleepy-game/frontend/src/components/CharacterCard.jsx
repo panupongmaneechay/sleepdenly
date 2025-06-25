@@ -32,7 +32,10 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
       if (cardType === 'theif') return false; 
 
       // Swap card does not target characters, so it cannot be dropped
-      if (cardType === 'swap') return false; // New: Prevent dropping swap card on character
+      if (cardType === 'swap') return false; 
+      
+      // Defense card does not target characters, so it cannot be dropped
+      if (cardType === 'defense') return false;
 
       // Lucky card can only be used on the player's own characters
       if (cardType === 'lucky' && targetPlayerId !== item.playerSourceId) return false;
@@ -56,7 +59,7 @@ function CharacterCard({ character, onClick, onCardDrop, isDroppable, targetPlay
         icon = '⭐'; 
         className = 'effect-lucky';
       }
-      // Note: Thief and Swap cards won't trigger this drop logic as canDrop is false for them
+      // Note: Thief, Swap and Defense cards won't trigger this drop logic as canDrop is false for them
       
       setEffectIcon(icon);
       setEffectClass(className);

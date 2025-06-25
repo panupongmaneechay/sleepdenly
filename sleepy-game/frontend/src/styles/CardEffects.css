@@ -71,3 +71,13 @@ body.dark-mode .effect-swap {
     color: #EE82EE; /* Violet */
     text-shadow: 0 0 5px rgba(238, 130, 238, 0.7);
 }
+
+/* New: Defense Card Effect Style */
+.effect-defense {
+    color: #00BCD4; /* Cyan for defense */
+    text-shadow: 0 0 5px rgba(0, 188, 212, 0.7);
+}
+body.dark-mode .effect-defense {
+    color: #00FFFF; /* Aqua */
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.7);
+}

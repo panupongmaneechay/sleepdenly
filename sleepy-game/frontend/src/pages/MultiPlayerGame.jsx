@@ -27,10 +27,14 @@ function MultiPlayerGame() {
   const [selectedCardsToSwap, setSelectedCardsToSwap] = useState([]); // Stores { index, card, isOpponent }
   const [swapCardPlayedIndex, setSwapCardPlayedIndex] = useState(null); // Stores the index of the 'Swap' card itself
 
+  // New states for Defense card logic
+  const [pendingAttackDetails, setPendingAttackDetails] = useState(null); // Stores details of the incoming attack
+
   const myPlayerId = location.state?.playerId;
   const opponentPlayerId = myPlayerId === 'player1' ? 'player2' : 'player1';
 
   const isMyTurn = gameState && gameState.current_turn === myPlayerId;
+  const isOpponentsTurn = gameState && gameState.current_turn === opponentPlayerId; // New: track opponent's turn
 
   // Helper to determine maximum cards to swap based on current hand sizes
   const getMaxCardsToSwap = () => {
@@ -60,6 +64,7 @@ function MultiPlayerGame() {
       setLogEntries(initialPlayerState.action_log || []);
       setSwapInProgress(initialPlayerState.swap_in_progress || false); // Initialize from game state
       setSelectedCardsToSwap(initialPlayerState.selected_cards_for_swap || []); // Initialize from game state
+      setPendingAttackDetails(initialPlayerState.pending_attack || null); // Initialize from game state
     });
 
     socket.on('game_update', (data) => {
@@ -70,6 +75,7 @@ function MultiPlayerGame() {
       // Update swapInProgress and selectedCardsToSwap from gameState
       setSwapInProgress(updatedPlayerState.swap_in_progress || false);
       setSelectedCardsToSwap(updatedPlayerState.selected_cards_for_swap || []);
+      setPendingAttackDetails(updatedPlayerState.pending_attack || null); // Update pending attack details
 
       if (data.win_status.game_over) {
         setGameOver(true);
@@ -107,6 +113,12 @@ function MultiPlayerGame() {
         return;
     }
 
+    // Prevent playing cards if there's a pending attack that needs defense
+    if (pendingAttackDetails) {
+        setMessage("An opponent's action is pending defense. Please decide to use a Defense card or not.");
+        return;
+    }
+
     setGameState(prevGameState => {
         if (!prevGameState) return null;
 
@@ -125,6 +137,12 @@ function MultiPlayerGame() {
             setMessage("Swap card cannot be dropped on a character. Click the card to use it.");
             return prevGameState;
         }
+        // Defense card cannot be dropped on a character
+        if (cardType === 'defense') {
+            setMessage("Defense card cannot be dropped on a character. It activates automatically when attacked or can be clicked to resolve.");
+            return prevGameState;
+        }
+
 
         setMessage("Playing card...");
         socket.emit('play_card', {
@@ -133,6 +151,7 @@ function MultiPlayerGame() {
             card_index: cardIndex,
             target_character_id: targetCharacterId,
             target_card_indices: null, // Ensure this is null for non-swap cards
+            defendingCardIndex: null, // Not defending now
         });
         return prevGameState;
     });
@@ -153,6 +172,12 @@ function MultiPlayerGame() {
             return prevGameState;
         }
 
+        // Prevent playing cards if there's a pending attack that needs defense
+        if (pendingAttackDetails) {
+            setMessage("An opponent's action is pending defense. Please decide to use a Defense card or not.");
+            return prevGameState;
+        }
+
         if (cardType === 'theif') {
             setMessage("Using Thief card...");
             socket.emit('play_card', {
@@ -161,6 +186,7 @@ function MultiPlayerGame() {
                 card_index: cardIndex,
                 target_character_id: null,
                 target_card_indices: null,
+                defendingCardIndex: null, // Not defending now
             });
             return prevGameState;
         }
@@ -180,6 +206,12 @@ function MultiPlayerGame() {
             setSelectedCardsToSwap([]); // Reset any previous selections
             setMessage(`Select up to ${Math.min(myHandSizeExcludingSwap, opponentHandSize)} of your cards and an equal number of opponent's cards to swap. Click the Confirm Swap button.`);
             return { ...prevGameState, swap_in_progress: true }; // Update game state immediately to reflect swap mode
+        }
+
+        // Defense card cannot be "played" like other cards, it's selected during an incoming attack
+        if (cardType === 'defense') {
+            setMessage("Defense cards are used when an opponent plays an action on you. You will be prompted to use it then.");
+            return prevGameState;
         }
 
         setMessage("Please drag and drop this card onto a character.");
@@ -242,6 +274,7 @@ function MultiPlayerGame() {
         card_index: swapCardPlayedIndex, // Pass the index of the Swap card itself
         target_character_id: null, // Not applicable for Swap
         target_card_indices: targetCardIndices,
+        defendingCardIndex: null, // Not defending now
       });
 
       // Reset swap state regardless, as the game_update will reflect actual state
@@ -259,12 +292,34 @@ function MultiPlayerGame() {
     setSelectedCardsToSwap([]);
     setSwapCardPlayedIndex(null);
     setMessage("Card swap cancelled. You can play another card or end your turn.");
+    // If a swap was initiated but cancelled, the turn should still be for the player who initiated it
+    // The game state will be updated by the server to reflect the cancellation.
+  };
+
+  // --- Defense Card Handlers ---
+  const handleDefendAction = (useDefense, defendingCardIndex = null) => {
+    if (!pendingAttackDetails) return; // Should not happen
+
+    setMessage("Resolving opponent's action...");
+    socket.emit('resolve_pending_attack', {
+      room_id: roomId,
+      player_id: myPlayerId,
+      useDefense: useDefense,
+      defendingCardIndex: defendingCardIndex,
+    });
+
+    setPendingAttackDetails(null); // Clear pending attack details
   };
 
   const handleEndTurn = () => {
     // Prevent ending turn if a swap is in progress
     if (swapInProgress) {
         setMessage("A card swap is in progress. Please complete or cancel the swap before ending your turn.");
+        return;
+    }
+    // Prevent ending turn if there's a pending attack that needs defense
+    if (pendingAttackDetails) {
+        setMessage("An opponent's action is pending defense. Please decide to use a Defense card or not.");
         return;
     }
 
@@ -316,6 +371,7 @@ function MultiPlayerGame() {
   const currentPlayerCharacters = currentPlayer ? currentPlayer.characters : [];
   const currentPlayerHand = currentPlayer ? currentPlayer.hand : [];
   const currentPlayerSleepCount = currentPlayer ? currentPlayer.sleep_count : 0;
+  const currentPlayerHasDefenseCard = currentPlayer ? currentPlayer.has_defense_card_in_hand : false;
   
   const opponentCharacters = opponentPlayer ? opponentPlayer.characters : [];
   const opponentHandSize = opponentPlayer ? opponentPlayer.hand_size : 0;
@@ -363,12 +419,15 @@ function MultiPlayerGame() {
                   key={`${index}-${card.name}-${JSON.stringify(card.effect)}`}
                   card={card}
                   index={index}
-                  isDraggable={isMyTurn && !gameOver && !swapInProgress} // Cannot drag if swap in progress
+                  isDraggable={isMyTurn && !gameOver && !swapInProgress && !pendingAttackDetails} 
                   playerSourceId={myPlayerId}
                   onClick={handlePlayCardAction} // Handles Thief and Swap card clicks
-                  isSelectableForSwap={swapInProgress && index !== swapCardPlayedIndex} // Allow selecting if swap is in progress and not the swap card itself
+                  isSelectableForSwap={swapInProgress && index !== swapCardPlayedIndex} 
                   onSelectForSwap={handleSelectCardForSwap}
                   isSelected={selectedCardsToSwap.some(item => !item.isOpponent && item.index === index)}
+                  isAttackIncoming={pendingAttackDetails && pendingAttackDetails.target_player_id === myPlayerId} 
+                  isDefendable={card.type === 'defense'} 
+                  onDefendSelect={(idx) => handleDefendAction(true, idx)} 
                 />
               ))}
             </div>
@@ -398,7 +457,28 @@ function MultiPlayerGame() {
               </div>
             )}
 
-            {!swapInProgress && (
+            {/* Defense Card Prompt */}
+            {pendingAttackDetails && pendingAttackDetails.target_player_id === myPlayerId && (
+              <div className="defense-prompt-container">
+                <h3>Opponent used {pendingAttackDetails.card_name}!</h3>
+                {currentPlayerHasDefenseCard ? (
+                  <>
+                    <p>Do you want to use a Defense Card to nullify this action?</p>
+                    <div className="defense-actions">
+                      <button onClick={() => handleDefendAction(true, currentPlayerHand.findIndex(card => card.type === 'defense'))}>Use Defense Card</button>
+                      <button onClick={() => handleDefendAction(false)} className="cancel-button">Don't Use</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p>You don't have a Defense Card to nullify this action.</p>
+                    <button onClick={() => handleDefendAction(false)}>Continue</button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {!swapInProgress && !pendingAttackDetails && (
               <button
                 onClick={handleEndTurn}
                 disabled={!isMyTurn || gameOver}
