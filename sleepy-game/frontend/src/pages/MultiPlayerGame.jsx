@@ -1,15 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-// Removed `io from 'socket.io-client'`
 import CharacterCard from '../components/CharacterCard';
 import HandCard from '../components/HandCard';
 import InformationPanel from '../components/InformationPanel';
 import PlayerZone from '../components/PlayerZone';
 import '../styles/Game.css';
 
-// Removed: const socket = io(SOCKET_SERVER_URL, ...);
-
-function MultiPlayerGame({ socket }) { // Receive socket as prop
+function MultiPlayerGame({ socket }) {
   const { roomId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -20,25 +17,21 @@ function MultiPlayerGame({ socket }) { // Receive socket as prop
   const [winner, setWinner] = useState(null);
   const [logEntries, setLogEntries] = useState([]);
 
-  // New states for Swap card logic
   const [swapInProgress, setSwapInProgress] = useState(false);
   const [selectedCardsToSwap, setSelectedCardsToSwap] = useState([]);
   const [swapCardPlayedIndex, setSwapCardPlayedIndex] = useState(null);
 
-  // New states for Defense card logic
   const [pendingAttackDetails, setPendingAttackDetails] = useState(null);
 
-  // Initialize myPlayerId from location state if available
-  const [myPlayerId, setMyPlayerId] = useState(location.state?.playerId || null); 
+  const [myPlayerId, setMyPlayerId] = useState(location.state?.playerId || null);
 
-  // Opponent Player ID is derived once myPlayerId is known
   const opponentPlayerId = myPlayerId === 'player1' ? 'player2' : 'player1';
 
   const isMyTurn = gameState && gameState.current_turn === myPlayerId;
   const isOpponentsTurn = gameState && gameState.current_turn === opponentPlayerId;
 
   const getMaxCardsToSwap = () => {
-    if (!gameState || !myPlayerId || swapCardPlayedIndex === null) return 0; // swapCardPlayedIndex is only set when Swap card is clicked
+    if (!gameState || !myPlayerId || swapCardPlayedIndex === null) return 0;
     const myHandSizeExcludingSwap = (gameState.players[myPlayerId].hand ? gameState.players[myPlayerId].hand.length : 0) - (swapCardPlayedIndex !== null ? 1 : 0);
     const opponentHandSize = gameState.players[opponentPlayerId].hand_size;
     return Math.min(myHandSizeExcludingSwap, opponentHandSize);
@@ -51,21 +44,13 @@ function MultiPlayerGame({ socket }) { // Receive socket as prop
         return;
     }
 
-    // No need to call socket.connect() here, it's connected in App.js
-
-    // If initial game state is provided from Lobby, set it
     if (location.state?.initialGameState && location.state?.playerId) {
         setGameState(location.state.initialGameState);
         setMyPlayerId(location.state.playerId);
         setMessage(location.state.initialGameState.message);
         setLogEntries(location.state.initialGameState.action_log || []);
-        // Clear location state after using it to avoid re-triggering this on subsequent renders
-        // Note: Direct modification of location.state is not standard React Router. 
-        // A better approach would be to manage game state with a global state manager (Redux, Zustand, Context API).
-        // For simplicity and direct answer, we proceed assuming initial data comes once.
     }
     
-    // Listen for game_start event (relevant if refreshing page or direct access)
     socket.on('game_start', (data) => {
         console.log("Game: Game start signal received. Setting state.", data);
         const player1_sid_in_room = data.players_sids.player1.sid;
@@ -96,16 +81,15 @@ function MultiPlayerGame({ socket }) { // Receive socket as prop
 
     socket.on('game_update', (data) => {
       console.log("Game update received:", data);
-      if (!myPlayerId) { // Ensure myPlayerId is set before processing update
+      if (!myPlayerId) {
           console.warn("myPlayerId not set when game_update received. Waiting for game_start.");
-          // Attempt to infer player ID if not set (fallback, ideally set by game_start)
           if (socket.id === data.players_sids.player1.sid) {
               setMyPlayerId('player1');
           } else if (socket.id === data.players_sids.player2.sid) {
               setMyPlayerId('player2');
           } else {
               console.error("Could not infer myPlayerId from game_update. Disconnecting.");
-              socket.disconnect(); // Disconnect if cannot infer player ID
+              socket.disconnect();
               navigate('/multiplayer-lobby');
               return;
           }
@@ -136,16 +120,13 @@ function MultiPlayerGame({ socket }) { // Receive socket as prop
       setMessage(`Game Error: ${data.message}`);
     });
 
-    // Clean up on component unmount
     return () => {
-      // Don't disconnect socket here, it's managed by App.js
-      socket.off('game_start'); // Turn off only listeners specific to this component
+      socket.off('game_start');
       socket.off('game_update');
       socket.off('player_disconnected');
       socket.off('error');
     };
-  }, [roomId, navigate, socket, myPlayerId, location.state]); // Add socket and myPlayerId to dependencies
-  // Make sure myPlayerId is updated from game_start event, not just location state
+  }, [roomId, navigate, socket, myPlayerId, location.state]);
 
   const handleCardDrop = (cardIndex, targetCharacterId, cardType, targetPlayerIdOfChar, playingPlayerId) => {
     if (swapInProgress) {
@@ -174,7 +155,7 @@ function MultiPlayerGame({ socket }) { // Receive socket as prop
             room_id: roomId,
             player_id: playingPlayerId,
             card_index: cardIndex,
-            target_character_id: targetCharacterId,
+            target_character_id: targetCharacterId, // Correctly pass targetCharacterId here
             target_card_indices: null,
             defendingCardIndex: null,
         });
@@ -363,11 +344,9 @@ function MultiPlayerGame({ socket }) { // Receive socket as prop
     }
   };
 
-  // Ensure currentPlayer and opponentPlayer are safely accessed only when gameState is not null
   const currentPlayer = gameState ? gameState.players[myPlayerId] : null;
   const opponentPlayer = gameState ? gameState.players[opponentPlayerId] : null;
 
-  // Render loading state if gameState or myPlayerId is not yet available
   if (!gameState || !myPlayerId) {
     return (
       <div className="game-container loading">
@@ -506,7 +485,6 @@ function MultiPlayerGame({ socket }) { // Receive socket as prop
               <p className={isMyTurn ? 'your-turn' : 'opponent-turn'}>
                 {message}
               </p>
-              {/* แสดง Log Entries ย้อนหลัง */}
               <div className="action-log-display">
                 {logEntries.slice().reverse().map((log, index) => (
                     <p key={`log-${index}`} className="log-entry">

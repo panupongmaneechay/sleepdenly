@@ -8,11 +8,9 @@ from game_logic import initialize_game, apply_card_effect, check_win_condition, 
 import eventlet 
 import eventlet.wsgi
 
-# Add this line right after imports to monkey patch standard libraries for Eventlet
 eventlet.monkey_patch() 
 
 app = Flask(__name__)
-# IMPORTANT: Change this to a strong, unique secret key for production!
 app.config['SECRET_KEY'] = 'a_very_secret_key_for_sleepy_game_development_only' 
 
 socketio = SocketIO(
@@ -27,7 +25,6 @@ socketio = SocketIO(
 game_rooms = {}
 next_room_id = 1000
 
-# --- API Routes (for Single Player) ---
 @app.route('/')
 def home():
     return "Welcome to Sleepy Game Backend!"
@@ -83,28 +80,19 @@ def api_resolve_pending_attack():
     attacking_card_data = next((card for card in gm_lg.ACTION_CARD_TEMPLATES if card["name"] == attacking_card_name), None)
     
     try:
-        updated_game_state = dict(game_state) 
+        updated_game_state = dict(game_state)
 
         if use_defense:
             updated_game_state = gm_lg.apply_card_effect(updated_game_state, player_id, defending_card_index, None, None, defending_card_index=defending_card_index)
             
-            if attacking_card_data:
-                updated_game_state["players"][attacker_player_id]["hand"].append(attacking_card_data)
-                updated_game_state["players"][attacker_player_id]["has_defense_card_in_hand"] = any(c["type"] == "defense" for c in updated_game_state["players"][attacker_player_id]["hand"])
-
-            updated_game_state["current_turn"] = attacker_player_id 
-            updated_game_state["message"] = updated_game_state["message"] + f" It is still {game_state['players'][attacker_player_id]['player_name']}'s turn."
-            
-        else: 
+        else:
             updated_game_state = gm_lg.apply_pending_action(updated_game_state, attacker_player_id, attacking_card_data, 
-                                                      current_game_state["pending_attack"]["target_character_id"], 
-                                                      current_game_state["pending_attack"]["target_card_indices"])
-            
-            updated_game_state["current_turn"] = player_id 
-            updated_game_state["message"] = updated_game_state["message"] + f" It's {game_state['players'][player_id]['player_name']}'s turn."
+                                                      game_state["pending_attack"]["target_character_id"], 
+                                                      game_state["pending_attack"]["target_card_indices"])
             
         updated_game_state["pending_attack"] = None 
         updated_game_state["swap_in_progress"] = False 
+        updated_game_state["selected_cards_for_swap"] = []
 
         win_status = check_win_condition(updated_game_state)
         return jsonify({
@@ -170,29 +158,28 @@ def handle_connect():
 @socketio.on('disconnect')
 def handle_disconnect():
     print(f'Client disconnected: {request.sid}')
-    # Iterate through a copy of game_rooms to safely delete items
     for room_id, room_data in list(game_rooms.items()): 
         if room_data.get('player1_sid') == request.sid:
             socketio.emit('player_disconnected', {'message': 'Player 1 disconnected'}, room=room_id)
-            if room_id in game_rooms: # Ensure room still exists before deleting
+            if room_id in game_rooms:
                 del game_rooms[room_id]
             print(f"Room {room_id} disbanded due to Player 1 disconnect.")
             break 
         elif room_data.get('player2_sid') == request.sid:
             socketio.emit('player_disconnected', {'message': 'Player 2 disconnected'}, room=room_id)
-            if room_id in game_rooms: # Ensure room still exists before deleting
+            if room_id in game_rooms:
                 del game_rooms[room_id]
             print(f"Room {room_id} disbanded due to Player 2 disconnect.")
             break 
 
 
 @socketio.on('create_room')
-def create_room(): # Added 'data' argument here to match frontend emission
+def create_room():
     global next_room_id
     room_id = str(next_room_id)
     next_room_id += 1
     game_rooms[room_id] = {
-        'player1_sid': request.sid, # Use request.sid for the actual connected client's sid
+        'player1_sid': request.sid,
         'player2_sid': None,
         'game_state': None,
         'turn': 'player1'
@@ -202,26 +189,24 @@ def create_room(): # Added 'data' argument here to match frontend emission
     print(f'Room {room_id} created by {request.sid} as Player 1')
 
 @socketio.on('join_room')
-def join_game_room(data): # Keep 'data' argument as frontend always sends it
+def join_game_room(data):
     room_id = data.get('room_id')
     client_sid = request.sid 
 
     if room_id in game_rooms and game_rooms[room_id]['player2_sid'] is None:
-        game_rooms[room_id]['player2_sid'] = client_sid # Assign player2_sid
+        game_rooms[room_id]['player2_sid'] = client_sid
         join_room(room_id)
         
         initial_game_state = gm_lg.initialize_game()
         game_rooms[room_id]['game_state'] = initial_game_state
         
-        # Add SIDs to initial_game_state for frontend to determine player_id
         initial_game_state['players_sids'] = {
             'player1': {'id': 'player1', 'sid': game_rooms[room_id]['player1_sid']},
             'player2': {'id': 'player2', 'sid': game_rooms[room_id]['player2_sid']}
         }
 
-        emit('room_joined', {'room_id': room_id, 'player_id': 'player2'}, room=client_sid) # Emit to joining client
+        emit('room_joined', {'room_id': room_id, 'player_id': 'player2'}, room=client_sid)
 
-        # Send a single 'game_start' event with both player's views AND SIDs
         socketio.emit('game_start', {
             'player1_game_state': gm_lg.get_game_state_for_player(initial_game_state, 'player1'),
             'player2_game_state': gm_lg.get_game_state_for_player(initial_game_state, 'player2'),
@@ -245,6 +230,9 @@ def handle_play_card(data):
     target_character_id = data.get('targetCharacterId')
     target_card_indices = data.get('targetCardIndices') 
     defending_card_index = data.get('defendingCardIndex') 
+
+    # Add print statements here for debugging incoming data
+    print(f"Received play_card data: player_id={player_id}, card_index={card_index}, target_character_id={target_character_id}, target_card_indices={target_card_indices}, defending_card_index={defending_card_index}")
 
     room_data = game_rooms.get(room_id)
     if not room_data:
@@ -288,39 +276,37 @@ def handle_resolve_pending_attack(data):
     use_defense = data['useDefense']
     defending_card_index = data.get('defendingCardIndex')
 
-    if not game_state["pending_attack"]:
+    room_data = game_rooms.get(room_id)
+    if not room_data:
+        return emit('error', {'message': 'Room not found.'})
+
+    current_game_state = room_data['game_state']
+
+    if not current_game_state["pending_attack"]:
         return emit('error', {'message': 'No pending attack to resolve.'})
     
-    if player_id != game_state["pending_attack"]["target_player_id"]:
+    if player_id != current_game_state["pending_attack"]["target_player_id"]:
         return emit('error', {'message': 'You are not the target of this action.'}, room=request.sid)
 
-    attacker_player_id = game_state["pending_attack"]["player_id"]
-    attacking_card_name = game_state["pending_attack"]["card_name"]
+    attacker_player_id = current_game_state["pending_attack"]["player_id"]
+    attacking_card_name = current_game_state["pending_attack"]["card_name"]
     
     attacking_card_data = next((card for card in gm_lg.ACTION_CARD_TEMPLATES if card["name"] == attacking_card_name), None)
     
     try:
-        updated_game_state = dict(current_game_state) 
+        updated_game_state = dict(current_game_state)
 
         if use_defense:
             updated_game_state = gm_lg.apply_card_effect(updated_game_state, player_id, defending_card_index, None, None, defending_card_index=defending_card_index)
             
-            if attacking_card_data:
-                updated_game_state["players"][attacker_player_id]["hand"].append(attacking_card_data)
-                updated_game_state["players"][attacker_player_id]["has_defense_card_in_hand"] = any(c["type"] == "defense" for c in updated_game_state["players"][attacker_player_id]["hand"])
-
-            updated_game_state["current_turn"] = attacker_player_id 
-            updated_game_state["message"] = updated_game_state["message"] + f" It is still {current_game_state['players'][attacker_player_id]['player_name']}'s turn."
-            
-        else: 
+        else:
             updated_game_state = gm_lg.apply_pending_action(updated_game_state, attacker_player_id, attacking_card_data,
                                                       current_game_state["pending_attack"]["target_character_id"],
                                                       current_game_state["pending_attack"]["target_card_indices"])
-            updated_game_state["current_turn"] = player_id 
-            updated_game_state["message"] = updated_game_state["message"] + f" It's {game_state['players'][player_id]['player_name']}'s turn."
-
+            
         updated_game_state["pending_attack"] = None 
         updated_game_state["swap_in_progress"] = False 
+        updated_game_state["selected_cards_for_swap"] = []
         game_rooms[room_id]['game_state'] = updated_game_state
 
         win_status = check_win_condition(updated_game_state)
