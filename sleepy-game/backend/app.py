@@ -1,9 +1,12 @@
 # sleepy-game/backend/app.py
 from flask import Flask, jsonify, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_cors import CORS # Import CORS
+
 import random
 import game_logic as gm_lg
 from game_logic import initialize_game, apply_card_effect, check_win_condition, get_game_state_for_player, end_turn, apply_pending_action
+import bot_ai # Import the bot_ai module
 
 import eventlet 
 import eventlet.wsgi
@@ -13,13 +16,16 @@ eventlet.monkey_patch()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'a_very_secret_key_for_sleepy_game_development_only' 
 
+# Initialize CORS for your Flask app for HTTP routes
+CORS(app, resources={r"/*": {"origins": ["http://localhost:3000"]}})
+
 socketio = SocketIO(
     app, 
     logger=True, 
     engineio_logger=True, 
     ping_interval=25, 
     ping_timeout=60,
-    cors_allowed_origins="http://localhost:3000" 
+    cors_allowed_origins=["http://localhost:3000"] # This is for Socket.IO connections
 )
 
 game_rooms = {}
@@ -136,7 +142,7 @@ def api_bot_move():
     data = request.json
     game_state = data['gameState']
     
-    updated_game_state = gm_lg.make_bot_move(game_state)
+    updated_game_state = bot_ai.make_bot_move(game_state) # Corrected: Call make_bot_move from bot_ai
     win_status = check_win_condition(updated_game_state)
     
     updated_game_state_with_flags = {
