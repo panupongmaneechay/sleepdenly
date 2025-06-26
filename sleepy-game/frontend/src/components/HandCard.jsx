@@ -26,11 +26,13 @@ function HandCard({
       playerSourceId: playerSourceId 
     },
     // Only allow dragging if it's draggable and not an opponent's card AND NOT a 'theif', 'swap', or 'defense' card
-    canDrag: isDraggable && card.type !== 'theif' && card.type !== 'swap' && card.type !== 'defense' && !isOpponentCard,
+    canDrag: () => { // Make canDrag a function to access latest state from closure
+        return isDraggable && card.type !== 'theif' && card.type !== 'swap' && card.type !== 'defense' && !isOpponentCard;
+    },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }), [index, card, isDraggable, playerSourceId, isOpponentCard]);
+  }), [index, card, isDraggable, playerSourceId, isOpponentCard]); // Added playerSourceId to dependencies
 
   const cardClass = `hand-card 
     ${isDragging ? 'dragging' : ''} 

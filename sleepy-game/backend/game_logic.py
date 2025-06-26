@@ -222,7 +222,7 @@ def steal_all_cards_from_opponent(game_state, playing_player_id):
     game_state["message"] = log_message
     game_state["action_log"].append(log_message)
 
-    game_state["players"][playing_player_id]["has_defense_card_in_hand"] = any(card["type"] == "defense" for card in game_state["players"][playing_player_id]["hand"])
+    game_state["players"][playing_player_id]["has_defense_card_in_hand"] = any(card["type"] == "defense" for card in player["hand"])
     game_state["players"][opponent_player_id]["has_defense_card_in_hand"] = any(card["type"] == "defense" for card in game_state["players"][opponent_player_id]["hand"])
     
     return game_state, stolen_count
@@ -305,6 +305,12 @@ def apply_pending_action(game_state, playing_player_id, card_data, target_charac
             my_card_idx = my_chosen_indices[i]
             opp_card_idx = opp_chosen_indices[i]
 
+            # Before popping, verify the card at the index is what we expect (prevent desync issues)
+            if my_card_idx >= len(player["hand"]):
+                raise ValueError(f"Swap error: Player's card index {my_card_idx} is out of bounds.")
+            if opp_card_idx >= len(opponent_hand):
+                raise ValueError(f"Swap error: Opponent's card index {opp_card_idx} is out of bounds.")
+            
             my_card = player["hand"].pop(my_card_idx)
             opponent_card = opponent_hand.pop(opp_card_idx)
             
@@ -336,9 +342,32 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
     opponent_name = game_state['players'][opponent_player_id]['player_name']
     player_name = game_state['players'][playing_player_id]['player_name']
 
+    # CRITICAL: Check if the card_index is still valid
+    if card_index < 0 or card_index >= len(player["hand"]):
+        raise ValueError(f"Invalid card index {card_index}. Card no longer exists at this index.")
+
+    card = player["hand"][card_index] # Get the card based on the index
+
+    # IMPORTANT: Re-validate turn and pending state here for robustness against delayed/repeated calls
+    if game_state["current_turn"] != playing_player_id and card["type"] != "defense" and game_state["pending_attack"] is None:
+        raise ValueError("It's not your turn to play a card.")
+    
+    if game_state.get("pending_attack") and card["type"] != "defense":
+        if playing_player_id == game_state["pending_attack"]["target_player_id"]:
+            raise ValueError("You must respond to the pending attack before playing other cards.")
+        else: # It's an attack on the other player, but current player is trying to act out of turn
+            if game_state["current_turn"] == playing_player_id: # Current player is trying to play during their turn but an attack is pending
+                pass # This is fine, they might be trying to defend or continue their turn
+            else: # It's neither the current player's turn nor are they the target of a pending attack
+                raise ValueError("Cannot play card while an action is pending defense on another player.")
+
+
+    # Handle defending against an attack
     if defending_card_index is not None:
         if game_state["pending_attack"] is None:
             raise ValueError("No incoming attack to defend against.")
+        
+        # Verify the defending card's index and type match
         if defending_card_index < 0 or defending_card_index >= len(player["hand"]):
             raise ValueError("Invalid defense card index.")
         defense_card = player["hand"][defending_card_index]
@@ -347,39 +376,35 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
         if playing_player_id != game_state["pending_attack"]["target_player_id"]:
              raise ValueError("You can only use a Defense card when you are the target of an action.")
 
-        player["hand"].pop(defending_card_index)
+        player["hand"].pop(defending_card_index) # Remove defense card
         log_message = f"{player_name} used {defense_card['name']} to nullify {game_state['pending_attack']['card_name']}'s effect!"
         game_state["message"] = log_message
         game_state["action_log"].append(log_message)
-        game_state["pending_attack"] = None
-        game_state["swap_in_progress"] = False
-        game_state["selected_cards_for_swap"] = []
+        game_state["pending_attack"] = None # Clear pending attack
+        game_state["swap_in_progress"] = False # Ensure these flags are reset
+        game_state["selected_cards_for_swap"] = [] # Ensure these flags are reset
         player["has_defense_card_in_hand"] = any(c["type"] == "defense" for c in player["hand"])
         
-        game_state["current_turn"] = game_state["pending_attack"]["player_id"]
+        game_state["current_turn"] = game_state["pending_attack"]["player_id"] # Turn returns to attacker
         return game_state
 
     # --- Logic for playing other card types ---
-    if card_index < 0 or card_index >= len(player["hand"]):
-        raise ValueError(f"Invalid card index: {card_index}. Player {playing_player_id} has {len(player['hand'])} cards.")
-
-    card = player["hand"][card_index]
-
-    # **CRITICAL DEBUGGING POINT: Check card type and target_character_id explicitly**
-    # This will give us more precise information in the logs.
+    
     print(f"DEBUG: Applying card effect for card '{card.get('name', 'UNKNOWN')}' (type: {card.get('type', 'UNKNOWN')})")
     print(f"DEBUG: target_character_id received: {target_character_id}")
 
     if card.get("type") in ["attack", "support", "lucky"]:
         if target_character_id is None:
-            # Modified error message for clearer debugging
-            raise ValueError(f"Target character ID is required for {card.get('name', 'Unknown Card')} (type: {card.get('type', 'Unknown Type')}) card type. Current target_character_id: {target_character_id}")
+            raise ValueError(f"Target character ID is required for {card.get('name', 'Unknown Card')} (type: {card.get('type', 'Unknown Type')}) card type.")
     elif card.get("type") not in ["theif", "swap", "defense"]:
-        # Catch unexpected card types that might somehow get past frontend validation for drops
-        raise ValueError(f"Attempted to play unknown or unplayable card type '{card.get('type', 'UNKNOWN')}' with target. Card name: {card.get('name', 'UNKNOWN')}")
+        raise ValueError(f"Attempted to play unknown or unplayable card type '{card.get('type', 'UNKNOWN')}'. Card name: {card.get('name', 'UNKNOWN')}")
     
     # Handle playing a Thief card
     if card["type"] == "theif":
+        # Additional check: ensure the card at index is indeed a thief card
+        if card["name"] != "Theif": # Check name as a safeguard
+            raise ValueError(f"Expected Thief card at index {card_index}, but found {card['name']}.")
+        
         player["hand"].pop(card_index)
         game_state, stolen_count = steal_all_cards_from_opponent(game_state, playing_player_id)
         player["has_defense_card_in_hand"] = any(c["type"] == "defense" for c in player["hand"])
@@ -388,7 +413,11 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
     
     # Handle playing a Swap card
     if card["type"] == "swap":
-        player_hand_size = len(player["hand"]) -1
+        # Additional check: ensure the card at index is indeed a swap card
+        if card["name"] != "Swap": # Check name as a safeguard
+            raise ValueError(f"Expected Swap card at index {card_index}, but found {card['name']}.")
+
+        player_hand_size = len(player["hand"]) -1 # This is the hand size BEFORE popping the current swap card
         opponent_hand = game_state["players"][opponent_player_id]["hand"]
         opponent_hand_size = len(opponent_hand)
 
@@ -400,7 +429,8 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
         if target_card_indices is None or len(target_card_indices) != num_cards_to_swap * 2:
             raise ValueError(f"Invalid number of selected cards for Swap. Expected {num_cards_to_swap} from each side.")
 
-        player["hand"].pop(card_index)
+        # Remove the Swap card first before performing the swap logic
+        player["hand"].pop(card_index) 
         player["has_defense_card_in_hand"] = any(c["type"] == "defense" for c in player["hand"])
 
         game_state["pending_attack"] = {
@@ -408,20 +438,19 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
             "card_type": card["type"],
             "player_id": playing_player_id,
             "target_player_id": opponent_player_id,
-            "target_character_id": None,
+            "target_character_id": None, 
             "target_card_indices": target_card_indices,
-            "original_card_index": card_index
+            "original_card_index": card_index 
         }
-        game_state["swap_in_progress"] = True
-        game_state["selected_cards_for_swap"] = []
-
+        game_state["swap_in_progress"] = True 
+        game_state["selected_cards_for_swap"] = [] 
 
         if game_state["players"][opponent_player_id]["has_defense_card_in_hand"]:
             game_state["message"] = f"{opponent_name} has a Defense Card! Waiting for their response."
             game_state["action_log"].append(game_state["message"])
             return game_state
         else:
-            game_state["swap_in_progress"] = False
+            game_state["swap_in_progress"] = False 
             return apply_pending_action(game_state, playing_player_id, card, None, target_card_indices)
 
     # For attack, support, lucky cards, ensure target character is valid and not asleep
@@ -443,25 +472,32 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
     if card["type"] == "lucky" and target_player_id != playing_player_id:
         raise ValueError("Lucky Sleep card can only be used on your own characters.")
 
-    game_state["pending_attack"] = {
-        "card_name": card["name"],
-        "card_type": card["type"],
-        "effect_value": card["effect"].get("value"),
-        "player_id": playing_player_id,
-        "target_player_id": target_player_id,
-        "target_character_id": target_character_id,
-        "original_card_index": card_index
-    }
+    # If it's an attack, create a pending attack. Otherwise (support/lucky), apply immediately.
+    if card["type"] == "attack":
+        game_state["pending_attack"] = {
+            "card_name": card["name"],
+            "card_type": card["type"],
+            "effect_value": card["effect"].get("value"),
+            "player_id": playing_player_id,
+            "target_player_id": target_player_id,
+            "target_character_id": target_character_id,
+            "original_card_index": card_index 
+        }
+        player["hand"].pop(card_index) # Remove card from hand
+        player["has_defense_card_in_hand"] = any(c["type"] == "defense" for c in player["hand"])
 
-    player["hand"].pop(card_index)
-    player["has_defense_card_in_hand"] = any(c["type"] == "defense" for c in player["hand"])
-
-    if game_state["players"][target_player_id]["has_defense_card_in_hand"] and target_player_id != playing_player_id:
-        game_state["message"] = f"{opponent_name} has a Defense Card! Waiting for their response."
-        game_state["action_log"].append(game_state["message"])
-        return game_state
-    else:
+        if game_state["players"][target_player_id]["has_defense_card_in_hand"] and target_player_id != playing_player_id:
+            game_state["message"] = f"{opponent_name} has a Defense Card! Waiting for their response."
+            game_state["action_log"].append(game_state["message"])
+            return game_state
+        else:
+            return apply_pending_action(game_state, playing_player_id, card, target_character_id)
+    elif card["type"] in ["support", "lucky"]:
+        player["hand"].pop(card_index) # Remove card from hand
+        player["has_defense_card_in_hand"] = any(c["type"] == "defense" for c in player["hand"])
         return apply_pending_action(game_state, playing_player_id, card, target_character_id)
+    else:
+        raise ValueError("Unhandled card type in apply_card_effect after initial checks.")
 
 
 def end_turn(game_state, player_id):
@@ -529,9 +565,9 @@ def get_game_state_for_player(full_game_state, player_id_for_view):
         "winner": full_game_state["winner"],
         "theft_in_progress": None,
         "action_log": full_game_state["action_log"],
+        "pending_attack": full_game_state.get("pending_attack"),
         "swap_in_progress": full_game_state.get("swap_in_progress", False),
         "selected_cards_for_swap": full_game_state.get("selected_cards_for_swap", []),
-        "pending_attack": full_game_state.get("pending_attack"),
     }
 
     if player_id_for_view == player1_id:

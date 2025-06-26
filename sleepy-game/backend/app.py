@@ -44,7 +44,7 @@ def api_apply_card():
     target_card_indices = data.get('targetCardIndices') 
     defending_card_index = data.get('defendingCardIndex') 
 
-    try:
+    try: 
         new_game_state = apply_card_effect(game_state, player_id, card_index, target_character_id, target_card_indices, defending_card_index)
         win_status = check_win_condition(new_game_state)
         
@@ -227,13 +227,13 @@ def handle_play_card(data):
     room_id = data['room_id']
     player_id = data['player_id']
     card_index = data['card_index']
-    target_character_id = data.get('targetCharacterId')
-    target_card_indices = data.get('targetCardIndices') 
+    target_character_id = data.get('target_character_id') 
+    target_card_indices = data.get('target_card_indices') 
     defending_card_index = data.get('defendingCardIndex') 
 
     # Add print statements here for debugging incoming data
-    print(f"Received play_card data: player_id={player_id}, card_index={card_index}, target_character_id={target_character_id}, target_card_indices={target_card_indices}, defending_card_index={defending_card_index}")
-
+    print(f"Received play_card data (from {request.sid}): player_id={player_id}, card_index={card_index}, target_character_id={target_character_id}, target_card_indices={target_card_indices}, defending_card_index={defending_card_index}")
+ 
     room_data = game_rooms.get(room_id)
     if not room_data:
         return emit('error', {'message': 'Room not found.'})

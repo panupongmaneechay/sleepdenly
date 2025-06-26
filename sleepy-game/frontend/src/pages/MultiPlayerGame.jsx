@@ -1,10 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import CharacterCard from '../components/CharacterCard';
 import HandCard from '../components/HandCard';
 import InformationPanel from '../components/InformationPanel';
 import PlayerZone from '../components/PlayerZone';
 import '../styles/Game.css';
+
+// Debounce utility function
+const debounce = (func, delay) => {
+  let timeout;
+  return function(...args) {
+    const context = this;
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(context, args), delay);
+  };
+};
 
 function MultiPlayerGame({ socket }) {
   const { roomId } = useParams();
@@ -16,6 +26,7 @@ function MultiPlayerGame({ socket }) {
   const [gameOver, setGameOver] = useState(false);
   const [winner, setWinner] = useState(null);
   const [logEntries, setLogEntries] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false); // New state to prevent double clicks/drops
 
   const [swapInProgress, setSwapInProgress] = useState(false);
   const [selectedCardsToSwap, setSelectedCardsToSwap] = useState([]);
@@ -30,12 +41,13 @@ function MultiPlayerGame({ socket }) {
   const isMyTurn = gameState && gameState.current_turn === myPlayerId;
   const isOpponentsTurn = gameState && gameState.current_turn === opponentPlayerId;
 
-  const getMaxCardsToSwap = () => {
+  const getMaxCardsToSwap = useCallback(() => {
     if (!gameState || !myPlayerId || swapCardPlayedIndex === null) return 0;
     const myHandSizeExcludingSwap = (gameState.players[myPlayerId].hand ? gameState.players[myPlayerId].hand.length : 0) - (swapCardPlayedIndex !== null ? 1 : 0);
     const opponentHandSize = gameState.players[opponentPlayerId].hand_size;
     return Math.min(myHandSizeExcludingSwap, opponentHandSize);
-  };
+  }, [gameState, myPlayerId, opponentPlayerId, swapCardPlayedIndex]);
+
 
   useEffect(() => {
     if (!socket || !roomId) {
@@ -49,6 +61,9 @@ function MultiPlayerGame({ socket }) {
         setMyPlayerId(location.state.playerId);
         setMessage(location.state.initialGameState.message);
         setLogEntries(location.state.initialGameState.action_log || []);
+        setSwapInProgress(location.state.initialGameState.swap_in_progress || false);
+        setSelectedCardsToSwap(location.state.initialGameState.selected_cards_for_swap || []);
+        setPendingAttackDetails(location.state.initialGameState.pending_attack || null);
     }
     
     socket.on('game_start', (data) => {
@@ -109,6 +124,7 @@ function MultiPlayerGame({ socket }) {
         setMessage(data.message);
       }
       setLogEntries(updatedPlayerState.action_log || []);
+      setIsProcessing(false); // End processing when game_update is received
     });
 
     socket.on('player_disconnected', (data) => {
@@ -118,6 +134,7 @@ function MultiPlayerGame({ socket }) {
 
     socket.on('error', (data) => {
       setMessage(`Game Error: ${data.message}`);
+      setIsProcessing(false); // End processing on error
     });
 
     return () => {
@@ -128,7 +145,11 @@ function MultiPlayerGame({ socket }) {
     };
   }, [roomId, navigate, socket, myPlayerId, location.state]);
 
-  const handleCardDrop = (cardIndex, targetCharacterId, cardType, targetPlayerIdOfChar, playingPlayerId) => {
+  const handleCardDrop = useCallback((cardIndex, targetCharacterId, cardType, targetPlayerIdOfChar, playingPlayerId) => {
+    if (isProcessing) { // Prevent action if already processing
+        setMessage("Please wait, an action is already being processed.");
+        return;
+    }
     if (swapInProgress) {
         setMessage("A card swap is in progress. Please select cards to swap or cancel.");
         return;
@@ -137,88 +158,93 @@ function MultiPlayerGame({ socket }) {
         setMessage("An opponent's action is pending defense. Please decide to use a Defense card or not.");
         return;
     }
+    console.log("handleCardDrop called. cardIndex:", cardIndex, "targetCharacterId:", targetCharacterId, "cardType:", cardType, "playingPlayerId:", playingPlayerId);
 
-    setGameState(prevGameState => {
-        if (!prevGameState) return null;
-        if (prevGameState.current_turn !== playingPlayerId || gameOver) {
-            setMessage("Not your turn or game over.");
-            return prevGameState;
-        }
+    if (!['attack', 'support', 'lucky'].includes(cardType)) {
+        setMessage("This card cannot be dropped on a character. Click the card to use it.");
+        return; 
+    }
 
-        if (cardType === 'theif' || cardType === 'swap' || cardType === 'defense') {
-          setMessage("This card cannot be dropped on a character. Click the card to use it.");
-          return prevGameState;
-        }
+    setIsProcessing(true); // Set processing true before sending request
+    setMessage("Playing card...");
 
-        setMessage("Playing card...");
+    // Ensure targetCharacterId is not null or undefined here
+    const finalTargetCharacterId = targetCharacterId || null; 
+    socket.emit('play_card', {
+        room_id: roomId,
+        player_id: playingPlayerId,
+        card_index: cardIndex,
+        target_character_id: finalTargetCharacterId, 
+        target_card_indices: null,
+        defendingCardIndex: null,
+    });
+    // State updates for multiplayer come from 'game_update' socket event
+  }, [roomId, gameState, gameOver, myPlayerId, swapInProgress, pendingAttackDetails, isProcessing, socket]);
+
+  const debouncedHandleCardDrop = useCallback(debounce(handleCardDrop, 300), [handleCardDrop]); // Debounce the drop handler
+
+  const handlePlayCardAction = useCallback((cardIndex, cardType) => {
+    if (isProcessing) { // Prevent action if already processing
+        setMessage("Please wait, an action is already being processed.");
+        return;
+    }
+    if (swapInProgress) {
+        setMessage("A card swap is in progress. Please select cards to swap or cancel.");
+        return;
+    }
+    if (pendingAttackDetails) {
+        setMessage("An opponent's action is pending defense. Please decide to use a Defense card or not.");
+        return;
+    }
+    console.log("handlePlayCardAction called. cardIndex:", cardIndex, "cardType:", cardType);
+
+    setIsProcessing(true); // Set processing true
+
+    if (cardType === 'theif') {
+        setMessage("Using Thief card...");
         socket.emit('play_card', {
             room_id: roomId,
-            player_id: playingPlayerId,
+            player_id: myPlayerId,
             card_index: cardIndex,
-            target_character_id: targetCharacterId, // Correctly pass targetCharacterId here
+            target_character_id: null, // Thief does not target characters
             target_card_indices: null,
             defendingCardIndex: null,
         });
-        return prevGameState;
-    });
-  };
+    } else if (cardType === 'swap') {
+        const myHandSizeExcludingSwap = gameState.players[myPlayerId].hand.length - 1;
+        const opponentHandSize = gameState.players[opponentPlayerId].hand_size;
 
-  const handlePlayCardAction = (cardIndex, cardType) => {
-    setGameState(prevGameState => {
-        if (!prevGameState) return null;
-        if (prevGameState.current_turn !== myPlayerId || gameOver) {
-            setMessage("Not your turn or game over.");
-            return prevGameState;
-        }
-        if (swapInProgress) {
-            setMessage("A card swap is in progress. Please select cards to swap or cancel.");
-            return prevGameState;
-        }
-        if (pendingAttackDetails) {
-            setMessage("An opponent's action is pending defense. Please decide to use a Defense card or not.");
-            return prevGameState;
+        if (myHandSizeExcludingSwap === 0 || opponentHandSize === 0) {
+            setMessage("You need at least one card (excluding the Swap card) and your opponent must have at least one card to use Swap.");
+            setIsProcessing(false); // Stop processing if validation fails
+            return;
         }
 
-        if (cardType === 'theif') {
-            setMessage("Using Thief card...");
-            socket.emit('play_card', {
-                room_id: roomId,
-                player_id: myPlayerId,
-                card_index: cardIndex,
-                target_character_id: null,
-                target_card_indices: null,
-                defendingCardIndex: null,
-            });
-            return prevGameState;
-        }
-
-        if (cardType === 'swap') {
-            const myHandSizeExcludingSwap = prevGameState.players[myPlayerId].hand.length - 1;
-            const opponentHandSize = prevGameState.players[opponentPlayerId].hand_size;
-
-            if (myHandSizeExcludingSwap === 0 || opponentHandSize === 0) {
-                setMessage("You need at least one card (excluding the Swap card) and your opponent must have at least one card to use Swap.");
-                return prevGameState;
-            }
-
-            setSwapInProgress(true);
-            setSwapCardPlayedIndex(cardIndex);
-            setSelectedCardsToSwap([]);
-            setMessage(`Select up to ${Math.min(myHandSizeExcludingSwap, opponentHandSize)} of your cards and an equal number of opponent's cards to swap. Click the Confirm Swap button.`);
-            return { ...prevGameState, swap_in_progress: true };
-        }
-
-        if (cardType === 'defense') {
-            setMessage("Defense cards are used when an opponent plays an action on you. You will be prompted to use it then.");
-            return prevGameState;
-        }
-
+        setSwapInProgress(true);
+        setSwapCardPlayedIndex(cardIndex);
+        setSelectedCardsToSwap([]);
+        setMessage(`Select up to ${Math.min(myHandSizeExcludingSwap, opponentHandSize)} of your cards and an equal number of opponent's cards to swap. Click the Confirm Swap button.`);
+        // No API call yet, so don't set isProcessing to false immediately
+    } else if (cardType === 'defense') {
+        setMessage("Defense cards are used when an opponent plays an action on you. You will be prompted to use it then.");
+        // No API call, so stop processing
+    } else {
         setMessage("Please drag and drop this card onto a character.");
-        return prevGameState;
-    });
-  };
+    }
 
-  const handleSelectCardForSwap = (cardIndex, card, isOpponent) => {
+    // Only set isProcessing to false if not entering a multi-step process like swap
+    if (cardType !== 'swap') {
+        setIsProcessing(false);
+    }
+  }, [roomId, gameState, gameOver, myPlayerId, swapInProgress, pendingAttackDetails, isProcessing, socket, opponentPlayerId]);
+
+  const debouncedHandlePlayCardAction = useCallback(debounce(handlePlayCardAction, 300), [handlePlayCardAction]);
+
+  const handleSelectCardForSwap = useCallback((cardIndex, card, isOpponent) => {
+    if (isProcessing) {
+        setMessage("Please wait, an action is already being processed.");
+        return;
+    }
     setSelectedCardsToSwap(prevSelected => {
       const currentSwapCount = getMaxCardsToSwap();
       const existingSelectionIndex = prevSelected.findIndex(
@@ -248,9 +274,14 @@ function MultiPlayerGame({ socket }) {
 
       return newSelected;
     });
-  };
+  }, [isProcessing, getMaxCardsToSwap, swapCardPlayedIndex]);
 
-  const handleConfirmSwap = () => {
+  const handleConfirmSwap = useCallback(() => {
+    if (isProcessing) {
+        setMessage("Please wait, an action is already being processed.");
+        return;
+    }
+
     const mySelected = selectedCardsToSwap.filter(item => !item.isOpponent);
     const oppSelected = selectedCardsToSwap.filter(item => item.isOpponent);
 
@@ -258,6 +289,7 @@ function MultiPlayerGame({ socket }) {
 
     if (mySelected.length === numCardsToSwap && oppSelected.length === numCardsToSwap) {
       setMessage("Confirming swap...");
+      setIsProcessing(true); // Set processing true
       const targetCardIndices = [];
       mySelected.forEach(item => targetCardIndices.push(item.index));
       oppSelected.forEach(item => targetCardIndices.push(item.index));
@@ -272,26 +304,34 @@ function MultiPlayerGame({ socket }) {
         defendingCardIndex: null,
       });
 
-      setSwapInProgress(false);
-      setSelectedCardsToSwap([]);
-      setSwapCardPlayedIndex(null);
-
+      // State updates for multiplayer come from 'game_update' socket event
+      // The finally block in handleCardDrop (not this confirm handler) will handle setIsProcessing(false)
+      // and clearing other states after the game_update is received.
     } else {
       setMessage(`Please select exactly ${numCardsToSwap} cards from your hand and ${numCardsToSwap} from the opponent's hand.`);
     }
-  };
+  }, [roomId, myPlayerId, selectedCardsToSwap, swapCardPlayedIndex, getMaxCardsToSwap, isProcessing, socket]);
 
-  const handleCancelSwap = () => {
+  const handleCancelSwap = useCallback(() => {
+    if (isProcessing) {
+        setMessage("Please wait, an action is already being processed.");
+        return;
+    }
     setSwapInProgress(false);
     setSelectedCardsToSwap([]);
     setSwapCardPlayedIndex(null);
     setMessage("Card swap cancelled. You can play another card or end your turn.");
-  };
+  }, [isProcessing]);
 
-  const handleDefendAction = (useDefense, defendingCardIndex = null) => {
+  const handleDefendAction = useCallback((useDefense, defendingCardIndex = null) => {
+    if (isProcessing) {
+        setMessage("Please wait, an action is already being processed.");
+        return;
+    }
     if (!pendingAttackDetails) return;
 
     setMessage("Resolving opponent's action...");
+    setIsProcessing(true); // Set processing true
     socket.emit('resolve_pending_attack', {
       room_id: roomId,
       player_id: myPlayerId,
@@ -299,10 +339,16 @@ function MultiPlayerGame({ socket }) {
       defendingCardIndex: defendingCardIndex,
     });
 
-    setPendingAttackDetails(null);
-  };
+    // State updates for multiplayer come from 'game_update' socket event
+    // The finally block in handleCardDrop (or game_update listener) will handle setIsProcessing(false)
+    // and clearing other states after the game_update is received.
+  }, [roomId, myPlayerId, pendingAttackDetails, isProcessing, socket]);
 
-  const handleEndTurn = () => {
+  const handleEndTurn = useCallback(() => {
+    if (isProcessing) {
+        setMessage("Please wait, an action is already being processed.");
+        return;
+    }
     if (swapInProgress) {
         setMessage("A card swap is in progress. Please complete or cancel the swap before ending your turn.");
         return;
@@ -312,23 +358,18 @@ function MultiPlayerGame({ socket }) {
         return;
     }
 
-    setGameState(prevGameState => {
-        if (!prevGameState) return null;
-        if (prevGameState.current_turn !== myPlayerId || gameOver) {
-            setMessage("Not your turn or game is over.");
-            return prevGameState;
-        }
-
-        setMessage("Ending your turn...");
-        socket.emit('end_turn', {
-            room_id: roomId,
-            player_id: myPlayerId,
-        });
-        return prevGameState;
+    setIsProcessing(true); // Set processing true
+    setMessage("Ending your turn...");
+    socket.emit('end_turn', {
+        room_id: roomId,
+        player_id: myPlayerId,
     });
-  };
+    // State updates for multiplayer come from 'game_update' socket event
+    // The finally block in handleCardDrop (or game_update listener) will handle setIsProcessing(false)
+    // and clearing other states after the game_update is received.
+  }, [roomId, myPlayerId, gameState, gameOver, swapInProgress, pendingAttackDetails, isProcessing, socket]);
 
-  const handleCharacterClick = (characterId) => {
+  const handleCharacterClick = useCallback((characterId) => {
     let character = null;
     character = gameState?.players[myPlayerId]?.characters.find(char => char.id === characterId);
     if (!character) {
@@ -342,7 +383,8 @@ function MultiPlayerGame({ socket }) {
             description: `${character.description || ''} Current Sleep: ${character.current_sleep}/${character.max_sleep}.`
         });
     }
-  };
+  }, [gameState, myPlayerId, opponentPlayerId]);
+
 
   const currentPlayer = gameState ? gameState.players[myPlayerId] : null;
   const opponentPlayer = gameState ? gameState.players[opponentPlayerId] : null;
@@ -376,7 +418,7 @@ function MultiPlayerGame({ socket }) {
             sleepCount={opponentSleepCount} 
             handSize={opponentHandSize}
             onCharacterClick={handleCharacterClick} 
-            onCardDrop={handleCardDrop}
+            onCardDrop={debouncedHandleCardDrop} // Use debounced handler
             isCurrentTurn={gameState.current_turn === opponentPlayerId}
             isOpponentZone={true}
             myPlayerId={myPlayerId}
@@ -391,7 +433,7 @@ function MultiPlayerGame({ socket }) {
             sleepCount={currentPlayerSleepCount} 
             handSize={currentPlayerHand.length}
             onCharacterClick={handleCharacterClick} 
-            onCardDrop={handleCardDrop}
+            onCardDrop={debouncedHandleCardDrop} // Use debounced handler
             isCurrentTurn={gameState.current_turn === myPlayerId}
             isOpponentZone={false}
             myPlayerId={myPlayerId}
@@ -407,12 +449,12 @@ function MultiPlayerGame({ socket }) {
                   key={`${index}-${card.name}-${JSON.stringify(card.effect)}`}
                   card={card}
                   index={index}
-                  isDraggable={isMyTurn && !gameOver && !swapInProgress && !pendingAttackDetails} 
+                  isDraggable={isMyTurn && !gameOver && !swapInProgress && !pendingAttackDetails && !isProcessing} // Disable drag if processing
                   playerSourceId={myPlayerId}
-                  onClick={handlePlayCardAction}
-                  isSelectableForSwap={swapInProgress && index !== swapCardPlayedIndex} 
+                  onClick={debouncedHandlePlayCardAction} // Use debounced handler
+                  isSelectableForSwap={swapInProgress && index !== swapCardPlayedIndex && !isProcessing} // Disable selection if processing
                   onSelectForSwap={handleSelectCardForSwap}
-                  isSelected={selectedCardsToSwap.some(item => !item.isOpponent && item.index === index)}
+                  isSelected={selectedCardsToSwap.some(item => item.isOpponent && item.index === index)}
                   isAttackIncoming={pendingAttackDetails && pendingAttackDetails.target_player_id === myPlayerId} 
                   isDefendable={card.type === 'defense'} 
                   onDefendSelect={(idx) => handleDefendAction(true, idx)} 
@@ -432,15 +474,15 @@ function MultiPlayerGame({ socket }) {
                       index={index}
                       isOpponentCard={true}
                       isDraggable={false}
-                      isSelectableForSwap={swapInProgress}
+                      isSelectableForSwap={swapInProgress && !isProcessing} // Disable selection if processing
                       onSelectForSwap={handleSelectCardForSwap}
                       isSelected={selectedCardsToSwap.some(item => item.isOpponent && item.index === index)}
                     />
                   ))}
                 </div>
                 <div className="swap-buttons">
-                  <button onClick={handleConfirmSwap} disabled={selectedCardsToSwap.filter(item => !item.isOpponent).length !== getMaxCardsToSwap() || selectedCardsToSwap.filter(item => item.isOpponent).length !== getMaxCardsToSwap()}>Confirm Swap</button>
-                  <button onClick={handleCancelSwap} className="cancel-button">Cancel Swap</button>
+                  <button onClick={handleConfirmSwap} disabled={isProcessing || selectedCardsToSwap.filter(item => !item.isOpponent).length !== getMaxCardsToSwap() || selectedCardsToSwap.filter(item => item.isOpponent).length !== getMaxCardsToSwap()}>Confirm Swap</button>
+                  <button onClick={handleCancelSwap} className="cancel-button" disabled={isProcessing}>Cancel Swap</button>
                 </div>
               </div>
             )}
@@ -453,14 +495,14 @@ function MultiPlayerGame({ socket }) {
                   <>
                     <p>Do you want to use a Defense Card to nullify this action?</p>
                     <div className="defense-actions">
-                      <button onClick={() => handleDefendAction(true, currentPlayerHand.findIndex(card => card.type === 'defense'))}>Use Defense Card</button>
-                      <button onClick={() => handleDefendAction(false)} className="cancel-button">Don't Use</button>
+                      <button onClick={() => handleDefendAction(true, currentPlayerHand.findIndex(card => card.type === 'defense'))} disabled={isProcessing}>Use Defense Card</button>
+                      <button onClick={() => handleDefendAction(false)} className="cancel-button" disabled={isProcessing}>Don't Use</button>
                     </div>
                   </>
                 ) : (
                   <>
                     <p>You don't have a Defense Card to nullify this action.</p>
-                    <button onClick={() => handleDefendAction(false)}>Continue</button>
+                    <button onClick={() => handleDefendAction(false)} disabled={isProcessing}>Continue</button>
                   </>
                 )}
               </div>
@@ -469,7 +511,7 @@ function MultiPlayerGame({ socket }) {
             {!swapInProgress && !pendingAttackDetails && (
               <button
                 onClick={handleEndTurn}
-                disabled={!isMyTurn || gameOver}
+                disabled={!isMyTurn || gameOver || isProcessing} // Disable if processing
                 className="end-turn-button"
               >
                 End Turn
@@ -485,6 +527,7 @@ function MultiPlayerGame({ socket }) {
               <p className={isMyTurn ? 'your-turn' : 'opponent-turn'}>
                 {message}
               </p>
+              {/* Display Log Entries in reverse order */}
               <div className="action-log-display">
                 {logEntries.slice().reverse().map((log, index) => (
                     <p key={`log-${index}`} className="log-entry">
