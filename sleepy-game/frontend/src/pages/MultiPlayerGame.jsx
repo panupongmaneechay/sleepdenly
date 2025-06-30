@@ -1,4 +1,3 @@
-// frontend/src/pages/MultiPlayerGame.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import CharacterCard from '../components/CharacterCard';
@@ -454,7 +453,8 @@ function MultiPlayerGame({ socket }) {
           ))}
         </div>
 
-        <div className="info-and-log-area">
+        {/* Combined Information and Game Log Area */}
+        <div className="info-and-log-area-combined">
           <InformationPanel info={information} />
           <div className="game-messages-area">
               <h2>Game Log</h2>
