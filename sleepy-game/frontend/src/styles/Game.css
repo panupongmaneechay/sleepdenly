@@ -75,22 +75,35 @@
     align-items: start;
 }
 
-/* Current Player Hand */
-.player-hand-container {
-  margin-top: 20px;
-  background-color: #d0d0d0;
-  padding: 15px;
+/* Current Player Hand section (now outside game-board-area) */
+.floating-action-card-container {
+  /* No longer fixed */
+  position: sticky; /* Sticky position so it scrolls with content but stays visible */
+  top: 20px; /* Distance from the top of the viewport when sticky */
+  /* Remove 'right' to place it in the flow */
+  /* background-color: rgba(220, 220, 220, 0.9); Semi-transparent background */
+  background-color: #d0d0d0; /* Solid background as it's in flow now */
+  border: 1px solid #ccc;
   border-radius: 8px;
-  min-height: 120px;
-  display: flex; /* Make it a flex container */
-  flex-direction: column; /* Stack items vertically */
-  align-items: center; /* Center horizontally */
-  gap: 15px; /* Space between hand and button */
+  padding: 15px;
+  box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+  width: 250px; /* Fixed width for the floating container */
+  z-index: 10; /* Ensure it stays on top if needed for overlaps */
+  overflow-y: auto; /* Enable vertical scrolling if content overflows */
+  max-height: calc(100vh - 40px); /* Limit height to viewport minus top/bottom padding */
+  display: flex; /* Flex container for its internal elements */
+  flex-direction: column; /* Stack contents vertically */
+  gap: 15px; /* Space between sections inside */
+  /* Added to align it: */
+  align-self: flex-start; /* Align to the start of the cross-axis of its flex parent */
 }
 
-body.dark-mode .player-hand-container {
-  background-color: #666;
+body.dark-mode .floating-action-card-container {
+    background-color: #666; /* Match the dark mode for player-hand-container */
+    border-color: #666;
+    color: #f0f0f0;
 }
+
 
 .player-hand {
   display: flex;
@@ -148,7 +161,7 @@ body.dark-mode .hand-card.dragging {
     flex-direction: column;
     gap: 20px; /* Space between info panel and game log */
     width: 100%; /* Take full width of its parent */
-    margin-top: 20px; /* Space below player hand */
+    margin-top: 0; /* No margin-top as it's not in the previous flow */
     max-width: 300px; /* Limit width of info/log area */
 }
 
@@ -433,5 +446,15 @@ body.dark-mode .defense-prompt-container h3 {
     .info-and-log-area {
         max-width: 100%;
         margin-top: 20px;
+    }
+
+    /* Floating container on small screens */
+    .floating-action-card-container {
+        position: static; /* Back to normal flow */
+        width: 100%;
+        max-height: unset;
+        margin-top: 20px;
+        right: auto;
+        top: auto;
     }
 }

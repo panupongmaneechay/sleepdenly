@@ -1,3 +1,4 @@
+// frontend/src/pages/MultiPlayerGame.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import CharacterCard from '../components/CharacterCard';
@@ -451,84 +452,6 @@ function MultiPlayerGame({ socket }) {
               swapInProgress={swapInProgress}
             />
           ))}
-
-          {/* Current Player Hand and Action Area */}
-          <div className="player-hand-container">
-            <div className="player-hand">
-              {myPlayer.hand.map((card, index) => (
-                <HandCard
-                  key={`${index}-${card.name}-${JSON.stringify(card.effect)}`}
-                  card={card}
-                  index={index}
-                  isDraggable={isMyTurn && !gameOver && !swapInProgress && !pendingAttackDetails && !isProcessing}
-                  playerSourceId={myPlayerId}
-                  onClick={debouncedHandlePlayCardAction}
-                  isSelectableForSwap={swapInProgress && index !== swapCardPlayedIndex && !isProcessing}
-                  onSelectForSwap={(idx, c, isOpponent) => handleSelectCardForSwap(idx, c, isOpponent, myPlayerId)} // Pass myPlayerId as target for my own cards
-                  isSelected={selectedCardsToSwap.some(item => !item.isOpponent && item.index === index)}
-                  isAttackIncoming={pendingAttackDetails && pendingAttackDetails.target_player_id === myPlayerId} 
-                  isDefendable={card.type === 'defense'} 
-                  onDefendSelect={(idx) => handleDefendAction(true, idx)} 
-                />
-              ))}
-            </div>
-
-            {/* Opponent's Hand for Swap Selection (only for human opponents) */}
-            {swapInProgress && humanOpponentForSwap && (
-              <div className="opponent-hand-for-swap">
-                <h3>Select {getMaxCardsToSwap()} cards from {humanOpponentForSwap.player_name}'s hand:</h3>
-                <div className="opponent-hand-cards">
-                  {Array.from({ length: opponentHandSizeForSwap }).map((_, index) => (
-                    <HandCard
-                      key={`opponent-card-${opponentPlayerIdForSwap}-${index}`}
-                      card={{ name: 'Opponent Card', type: 'unknown', description: 'Hidden Card' }}
-                      index={index}
-                      isOpponentCard={true}
-                      isDraggable={false}
-                      isSelectableForSwap={swapInProgress && !isProcessing}
-                      onSelectForSwap={(idx, c, isOpponent) => handleSelectCardForSwap(idx, c, isOpponent, opponentPlayerIdForSwap)}
-                      isSelected={selectedCardsToSwap.some(item => item.isOpponent && item.index === index && item.targetPlayerId === opponentPlayerIdForSwap)}
-                    />
-                  ))}
-                </div>
-                <div className="swap-buttons">
-                  <button onClick={handleConfirmSwap} disabled={isProcessing || selectedCardsToSwap.filter(item => !item.isOpponent).length !== getMaxCardsToSwap() || selectedCardsToSwap.filter(item => item.isOpponent).length !== getMaxCardsToSwap()}>Confirm Swap</button>
-                  <button onClick={handleCancelSwap} className="cancel-button" disabled={isProcessing}>Cancel Swap</button>
-                </div>
-              </div>
-            )}
-
-            {/* Defense Card Prompt */}
-            {pendingAttackDetails && pendingAttackDetails.target_player_id === myPlayerId && (
-              <div className="defense-prompt-container">
-                <h3>{gameState.players[pendingAttackDetails.player_id].player_name} used {pendingAttackDetails.card_name}!</h3>
-                {currentPlayerHasDefenseCard ? (
-                  <>
-                    <p>Do you want to use a Defense Card to nullify this action?</p>
-                    <div className="defense-actions">
-                      <button onClick={() => handleDefendAction(true, myPlayer.hand.findIndex(card => card.type === 'defense'))} disabled={isProcessing}>Use Defense Card</button>
-                      <button onClick={() => handleDefendAction(false)} className="cancel-button" disabled={isProcessing}>Don't Use</button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p>You don't have a Defense Card to nullify this action.</p>
-                    <button onClick={() => handleDefendAction(false)} disabled={isProcessing}>Continue</button>
-                  </>
-                )}
-              </div>
-            )}
-
-            {!swapInProgress && !pendingAttackDetails && (
-              <button
-                onClick={handleEndTurn}
-                disabled={!isMyTurn || gameOver || isProcessing}
-                className="end-turn-button"
-              >
-                End Turn
-              </button>
-            )}
-          </div>
         </div>
 
         <div className="info-and-log-area">
@@ -549,6 +472,84 @@ function MultiPlayerGame({ socket }) {
               {gameOver && <button onClick={() => navigate('/multiplayer-lobby')} className="restart-button">Back to Lobby</button>}
           </div>
         </div>
+      </div>
+
+      {/* Floating Action Card Area */}
+      <div className="floating-action-card-container">
+        <div className="player-hand">
+          {myPlayer.hand.map((card, index) => (
+            <HandCard
+              key={`${index}-${card.name}-${JSON.stringify(card.effect)}`}
+              card={card}
+              index={index}
+              isDraggable={isMyTurn && !gameOver && !swapInProgress && !pendingAttackDetails && !isProcessing}
+              playerSourceId={myPlayerId}
+              onClick={debouncedHandlePlayCardAction}
+              isSelectableForSwap={swapInProgress && index !== swapCardPlayedIndex && !isProcessing}
+              onSelectForSwap={(idx, c, isOpponent) => handleSelectCardForSwap(idx, c, isOpponent, myPlayerId)} // Pass myPlayerId as target for my own cards
+              isSelected={selectedCardsToSwap.some(item => !item.isOpponent && item.index === index)}
+              isAttackIncoming={pendingAttackDetails && pendingAttackDetails.target_player_id === myPlayerId} 
+              isDefendable={card.type === 'defense'} 
+              onDefendSelect={(idx) => handleDefendAction(true, idx)} 
+            />
+          ))}
+        </div>
+
+        {/* Opponent's Hand for Swap Selection (only for human opponents) */}
+        {swapInProgress && humanOpponentForSwap && (
+          <div className="opponent-hand-for-swap">
+            <h3>Select {getMaxCardsToSwap()} cards from {humanOpponentForSwap.player_name}'s hand:</h3>
+            <div className="opponent-hand-cards">
+              {Array.from({ length: opponentHandSizeForSwap }).map((_, index) => (
+                <HandCard
+                  key={`opponent-card-${opponentPlayerIdForSwap}-${index}`}
+                  card={{ name: 'Opponent Card', type: 'unknown', description: 'Hidden Card' }}
+                  index={index}
+                  isOpponentCard={true}
+                  isDraggable={false}
+                  isSelectableForSwap={swapInProgress && !isProcessing}
+                  onSelectForSwap={(idx, c, isOpponent) => handleSelectCardForSwap(idx, c, isOpponent, opponentPlayerIdForSwap)}
+                  isSelected={selectedCardsToSwap.some(item => item.isOpponent && item.index === index && item.targetPlayerId === opponentPlayerIdForSwap)}
+                />
+              ))}
+            </div>
+            <div className="swap-buttons">
+              <button onClick={handleConfirmSwap} disabled={isProcessing || selectedCardsToSwap.filter(item => !item.isOpponent).length !== getMaxCardsToSwap() || selectedCardsToSwap.filter(item => item.isOpponent).length !== getMaxCardsToSwap()}>Confirm Swap</button>
+              <button onClick={handleCancelSwap} className="cancel-button" disabled={isProcessing}>Cancel Swap</button>
+            </div>
+          </div>
+        )}
+
+        {/* Defense Card Prompt */}
+        {pendingAttackDetails && pendingAttackDetails.target_player_id === myPlayerId && (
+          <div className="defense-prompt-container">
+            <h3>{gameState.players[pendingAttackDetails.player_id].player_name} used {pendingAttackDetails.card_name}!</h3>
+            {currentPlayerHasDefenseCard ? (
+              <>
+                <p>Do you want to use a Defense Card to nullify this action?</p>
+                <div className="defense-actions">
+                  <button onClick={() => handleDefendAction(true, myPlayer.hand.findIndex(card => card.type === 'defense'))} disabled={isProcessing}>Use Defense Card</button>
+                  <button onClick={() => handleDefendAction(false)} className="cancel-button" disabled={isProcessing}>Don't Use</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p>You don't have a Defense Card to nullify this action.</p>
+                <button onClick={() => handleDefendAction(false)} disabled={isProcessing}>Continue</button>
+              </>
+            )}
+          </div>
+        )}
+
+        {!swapInProgress && !pendingAttackDetails && (
+          <button
+            onClick={handleEndTurn}
+            disabled={!isMyTurn || gameOver || isProcessing}
+            className="end-turn-button"
+          >
+            End Turn
+          </button>
+        )}
       </div>
     </div>
   );
