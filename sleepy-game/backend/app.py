@@ -144,8 +144,8 @@ def start_multiplayer_game(room_id):
         player_id_counter += 1
 
     player_ids_list = list(room_data['player_sids'].keys())
-    # Sort player_ids for consistent turn order: player1, player2, ..., bot1, bot2...
-    player_ids_list.sort(key=lambda x: int(x.replace('player', '').replace('bot', '')))
+    # Sort player_ids for consistent turn order: player1, player2, ..., playerN
+    player_ids_list.sort(key=lambda x: int(x.replace('player', '')))
 
     initial_game_state = gm_lg.initialize_game(room_data['total_players'], room_data['num_bots'], player_ids_list)
     room_data['game_state'] = initial_game_state
@@ -154,7 +154,7 @@ def start_multiplayer_game(room_id):
     game_states_for_players = {}
     for p_id in player_ids_list:
         game_states_for_players[p_id] = {
-            'sid': room_data['player_sids'][p_id]['sid'],
+            'sid': room_data['player_sids'][p_id]['sid'] if not room_data['player_sids'][p_id]['is_bot'] else None,
             'game_state': gm_lg.get_game_state_for_player(initial_game_state, p_id)
         }
     
@@ -406,15 +406,7 @@ def trigger_bot_move(room_id):
     elif updated_game_state['players'][updated_game_state['current_turn']].get('is_bot') and updated_game_state['current_turn'] != current_player_id:
         # If it's still a bot's turn (e.g., current bot ended its turn, and next player is also a bot)
         eventlet.spawn_after(1, trigger_bot_move, room_id)
-    elif updated_game_state['players'][current_game_state['current_turn']].get('is_bot') and updated_game_state['pending_attack'] and updated_game_state['pending_attack']['target_player_id'] == current_player_id:
-        # If bot played a card that caused a pending attack on itself, and it has to respond again
-        eventlet.spawn_after(1, trigger_bot_move, room_id)
     elif current_game_state.get("pending_attack") and current_game_state["pending_attack"]["target_player_id"] != current_player_id and updated_game_state['players'][updated_game_state['current_turn']].get('is_bot'):
         # If bot played an attacking card and now it's its turn again, but the target human needs to defend first
         # No recursive call here, waiting for human to resolve
         pass
-
-
-if __name__ == '__main__':
-    print("Starting server with Eventlet...")
-    eventlet.wsgi.server(eventlet.listen(('127.0.0.1', 5000)), app)

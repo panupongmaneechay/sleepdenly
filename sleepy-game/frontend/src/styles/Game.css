@@ -22,13 +22,60 @@
 
 /* Specific styling for the actual game board (player zones) */
 .game-board {
-    display: flex;
-    flex-wrap: wrap; /* Allow player zones to wrap */
+    display: flex; /* Default to flex, will be overridden by grid for 3/4 players */
+    flex-wrap: wrap;
     gap: 20px;
-    justify-content: center; /* Center player zones */
+    justify-content: center;
+    align-items: flex-start; /* Align to top */
+    width: 100%; /* Take full available width */
+}
+
+/* Layout for 2 players (default flex behavior for column wrapping) */
+.game-board--2-players {
+    flex-direction: column;
+    align-items: center; /* Center the zones vertically */
+}
+
+/* Layout for 3 players */
+.game-board--3-players {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr; /* Three equal columns */
+    grid-template-rows: auto auto; /* Two rows */
+    gap: 20px;
+    justify-items: center; /* Center items within grid cells */
+    align-items: start; /* Align to top of grid cells */
+}
+
+/* Specific positioning for 3 players */
+.game-board--3-players .player-zone:nth-child(1) { /* Top player */
+    grid-column: 1 / span 3; /* Spans all three columns */
+}
+
+.game-board--3-players .player-zone:nth-child(2) { /* Left middle player */
+    grid-column: 1 / span 1; /* First column */
+}
+
+.game-board--3-players .player-zone:nth-child(3) { /* Right middle player */
+    grid-column: 3 / span 1; /* Third column */
+}
+
+/* If a 4th player exists in a 3-player game (shouldn't happen with correct game logic, but for robustness) */
+.game-board--3-players .player-zone:nth-child(4) { 
+    grid-column: 2 / span 1; /* Center column */
 }
 
 
+/* Layout for 4 players */
+.game-board--4-players {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two equal columns */
+    grid-template-rows: auto auto; /* Two equal rows */
+    gap: 20px;
+    justify-items: center;
+    align-items: start;
+}
+
+/* Current Player Hand */
 .player-hand-container {
   margin-top: 20px;
   background-color: #d0d0d0;

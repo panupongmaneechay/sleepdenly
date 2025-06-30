@@ -114,14 +114,15 @@ def initialize_game(total_players, num_bots, player_ids_list):
 
     # Distribute characters to all players (human and bot)
     for i, player_id in enumerate(player_ids_list):
-        is_bot = True if i >= (total_players - num_bots) else False # Simple check for bot based on order
+        is_bot = (i >= (total_players - num_bots)) # Bots are assigned after human players in the sorted list
         game_state["players"][player_id] = {
             "characters": [],
             "hand": [],
             "sleep_count": 0,
             "player_name": f"Player {i+1}", # Display name based on order
             "has_defense_card_in_hand": False,
-            "is_bot": is_bot
+            "is_bot": is_bot,
+            "has_lost": False # New flag to track if player has lost
         }
         for char_index in range(INITIAL_CHARACTERS_PER_PLAYER):
             char_data = all_characters.pop(0)
@@ -404,7 +405,7 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
         # Determine target opponent for Thief
         if not target_player_for_thief_swap:
             # If human player didn't select, or bot playing: pick a random active opponent
-            active_opponents = [pid for pid, p_data in game_state["players"].items() if pid != playing_player_id and not check_player_lost(game_state, pid)]
+            active_opponents = [pid for pid in game_state["player_turn_order"] if pid != playing_player_id and not check_player_lost(game_state, pid)]
             if not active_opponents:
                 raise ValueError("No active opponents to steal from.")
             target_player_for_thief_swap = random.choice(active_opponents)
@@ -422,7 +423,7 @@ def apply_card_effect(game_state, playing_player_id, card_index, target_characte
         if not target_player_for_thief_swap:
             # If human player didn't select, or bot playing: pick a random active, non-bot opponent
             # For simplicity, bots won't swap with other bots, only humans
-            active_human_opponents = [pid for pid, p_data in game_state["players"].items() if pid != playing_player_id and not p_data.get('is_bot', False) and not check_player_lost(game_state, pid)]
+            active_human_opponents = [pid for pid in game_state["player_turn_order"] if pid != playing_player_id and not game_state["players"][pid].get('is_bot', False) and not check_player_lost(game_state, pid)]
             if not active_human_opponents:
                 raise ValueError("No active human opponents to swap cards with.")
             target_player_for_thief_swap = random.choice(active_human_opponents)
@@ -580,7 +581,10 @@ def check_win_condition(game_state):
 def check_player_lost(game_state, player_id):
     player_data = game_state["players"][player_id]
     # A player loses if all their characters are asleep
-    return player_data["sleep_count"] >= INITIAL_CHARACTERS_PER_PLAYER
+    if player_data["sleep_count"] >= INITIAL_CHARACTERS_PER_PLAYER:
+        player_data["has_lost"] = True # Mark player as lost
+        return True
+    return False
 
 
 def get_game_state_for_player(full_game_state, player_id_for_view):
@@ -604,7 +608,8 @@ def get_game_state_for_player(full_game_state, player_id_for_view):
             "player_name": p_data["player_name"],
             "has_defense_card_in_hand": p_data["has_defense_card_in_hand"],
             "is_bot": p_data["is_bot"],
-            "player_id": p_id # Include player_id for reference in frontend
+            "player_id": p_id, # Include player_id for reference in frontend
+            "has_lost": p_data["has_lost"] # Include has_lost flag
         }
         # Only include hand for the viewing player, hide for others/bots
         if p_id == player_id_for_view:

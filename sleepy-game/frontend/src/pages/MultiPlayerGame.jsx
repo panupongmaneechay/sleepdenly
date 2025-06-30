@@ -36,14 +36,19 @@ function MultiPlayerGame({ socket }) {
 
   const [myPlayerId, setMyPlayerId] = useState(location.state?.playerId || null);
 
+  // Derive isMyTurn from gameState
+  const isMyTurn = gameState && gameState.current_turn === myPlayerId;
+
+
   const getMaxCardsToSwap = useCallback(() => {
     if (!gameState || !myPlayerId || swapCardPlayedIndex === null) return 0;
     const myHand = gameState.players[myPlayerId]?.hand || [];
     const myHandSizeExcludingSwap = myHand.length - (myHand[swapCardPlayedIndex]?.type === 'swap' ? 1 : 0);
     
     let maxOpponentHandSize = 0;
+    // Find the largest hand among active human opponents
     for (const pId in gameState.players) {
-        if (pId !== myPlayerId && !gameState.players[pId].is_bot) { // Find the largest hand among human opponents
+        if (pId !== myPlayerId && !gameState.players[pId].is_bot && !gameState.players[pId].has_lost) {
             maxOpponentHandSize = Math.max(maxOpponentHandSize, gameState.players[pId].hand_size);
         }
     }
@@ -198,7 +203,9 @@ function MultiPlayerGame({ socket }) {
 
     if (cardType === 'theif') {
         setMessage("Using Thief card...");
-        // For thief, if there are multiple opponents, offer choice later. For now, backend handles picking a random opponent.
+        // For Thief card, the backend will decide the target opponent if not explicitly selected.
+        // For human players, typically they would select the target, but current UI doesn't support that directly.
+        // Passing null for target_player_for_thief_swap lets backend choose for now.
         socket.emit('play_card', {
             room_id: roomId,
             player_id: myPlayerId,
@@ -206,7 +213,7 @@ function MultiPlayerGame({ socket }) {
             target_character_id: null, 
             target_card_indices: null,
             defending_card_index: null,
-            target_player_for_thief_swap: null // Bot will choose, or can be extended for human choice
+            target_player_for_thief_swap: null // Backend will choose a random active human opponent
         });
     } else if (cardType === 'swap') {
         const myHandSizeExcludingSwap = (gameState.players[myPlayerId]?.hand?.length || 0) - 1;
@@ -214,7 +221,8 @@ function MultiPlayerGame({ socket }) {
         let maxOpponentHandSize = 0;
         let eligibleOpponents = [];
         for (const pId in gameState.players) {
-            if (pId !== myPlayerId && !gameState.players[pId].is_bot) { // Only consider human opponents for swapping with the current player
+            // Only human opponents are eligible for swap by a human player (bots swap randomly with any opponent)
+            if (pId !== myPlayerId && !gameState.players[pId].is_bot && !gameState.players[pId].has_lost) {
                 maxOpponentHandSize = Math.max(maxOpponentHandSize, gameState.players[pId].hand_size);
                 eligibleOpponents.push(pId);
             }
@@ -243,7 +251,7 @@ function MultiPlayerGame({ socket }) {
 
   const debouncedHandlePlayCardAction = useCallback(debounce(handlePlayCardAction, 300), [handlePlayCardAction]);
 
-  const handleSelectCardForSwap = useCallback((cardIndex, card, isOpponent, opponentPlayerIdForSwap) => {
+  const handleSelectCardForSwap = useCallback((cardIndex, card, isOpponent, targetPlayerIdForSelection) => {
     if (isProcessing) {
         setMessage("Please wait, an action is already being processed.");
         return;
@@ -251,7 +259,7 @@ function MultiPlayerGame({ socket }) {
     setSelectedCardsToSwap(prevSelected => {
       const currentSwapCount = getMaxCardsToSwap();
       const existingSelectionIndex = prevSelected.findIndex(
-        (item) => item.index === cardIndex && item.isOpponent === isOpponent && item.targetPlayerId === opponentPlayerIdForSwap
+        (item) => item.index === cardIndex && item.isOpponent === isOpponent && item.targetPlayerId === targetPlayerIdForSelection
       );
 
       let newSelected = [...prevSelected];
@@ -260,10 +268,22 @@ function MultiPlayerGame({ socket }) {
         newSelected.splice(existingSelectionIndex, 1);
       } else {
         const mySelectedCount = newSelected.filter(item => !item.isOpponent).length;
-        const oppSelectedCount = newSelected.filter(item => item.isOpponent && item.targetPlayerId === opponentPlayerIdForSwap).length;
+        // Count opponent cards for this specific opponent
+        const oppSelectedCount = newSelected.filter(item => item.isOpponent && item.targetPlayerId === targetPlayerIdForSelection).length;
 
-        if (isOpponent && oppSelectedCount < currentSwapCount) {
-          newSelected.push({ index: cardIndex, card, isOpponent, targetPlayerId: opponentPlayerIdForSwap });
+        if (isOpponent) {
+            // Ensure only selecting from one opponent for swap for human players
+            const selectedOpponents = new Set(newSelected.filter(item => item.isOpponent).map(item => item.targetPlayerId));
+            if (selectedOpponents.size > 0 && !selectedOpponents.has(targetPlayerIdForSelection)) {
+                setMessage("You can only swap with one opponent at a time. Deselect cards from previous opponent first.");
+                return prevSelected;
+            }
+
+            if (oppSelectedCount < currentSwapCount) {
+                newSelected.push({ index: cardIndex, card, isOpponent, targetPlayerId: targetPlayerIdForSelection });
+            } else {
+                setMessage(`You can only select up to ${currentSwapCount} cards from the opponent's hand.`);
+            }
         } else if (!isOpponent && mySelectedCount < currentSwapCount) {
           if (cardIndex !== swapCardPlayedIndex) { 
               newSelected.push({ index: cardIndex, card, isOpponent, targetPlayerId: myPlayerId });
@@ -290,37 +310,26 @@ function MultiPlayerGame({ socket }) {
 
     const numCardsToSwap = getMaxCardsToSwap();
 
-    // Group opponent selected cards by player
-    const opponentCardsByPlayer = {};
-    opponentSelected.forEach(item => {
-        if (!opponentCardsByPlayer[item.targetPlayerId]) {
-            opponentCardsByPlayer[item.targetPlayerId] = [];
-        }
-        opponentCardsByPlayer[item.targetPlayerId].push(item);
-    });
+    const selectedOpponentPlayerIds = new Set(opponentSelected.map(item => item.targetPlayerId));
 
-    // Check if exactly 'numCardsToSwap' are selected from my hand and from one specific opponent
-    const hasValidOpponentSelection = Object.keys(opponentCardsByPlayer).length === 1 && 
-                                     opponentCardsByPlayer[Object.keys(opponentCardsByPlayer)[0]].length === numCardsToSwap;
-                                     
-    if (mySelected.length === numCardsToSwap && hasValidOpponentSelection) {
+    if (mySelected.length === numCardsToSwap && opponentSelected.length === numCardsToSwap && selectedOpponentPlayerIds.size === 1) {
       setMessage("Confirming swap...");
       setIsProcessing(true); 
       
       const targetCardIndices = []; // This will be flattened: [myIdx1, oppIdx1, myIdx2, oppIdx2, ...]
       mySelected.forEach(item => targetCardIndices.push(item.index));
-      opponentSelected.forEach(item => targetCardIndices.push(item.index)); // Add opponent card indices
+      opponentSelected.forEach(item => targetCardIndices.push(item.index)); 
 
-      const targetPlayerForSwap = Object.keys(opponentCardsByPlayer)[0]; // The single opponent chosen
+      const targetPlayerForSwap = selectedOpponentPlayerIds.values().next().value; // The single opponent chosen
 
       socket.emit('play_card', {
         room_id: roomId,
         player_id: myPlayerId,
         card_index: swapCardPlayedIndex,
         target_character_id: null,
-        target_card_indices: targetCardIndices, // These are combined indices now
+        target_card_indices: targetCardIndices, 
         defending_card_index: null,
-        target_player_for_thief_swap: targetPlayerForSwap // Specify the target opponent for swap
+        target_player_for_thief_swap: targetPlayerForSwap 
       });
 
     } else {
@@ -408,15 +417,15 @@ function MultiPlayerGame({ socket }) {
   }
 
   const myPlayer = gameState.players[myPlayerId];
-  const allPlayers = Object.values(gameState.players);
-  const otherPlayers = allPlayers.filter(p => p.player_id !== myPlayerId);
-
-  const isMyTurn = gameState.current_turn === myPlayerId;
-
+  const allPlayers = Object.values(gameState.players).sort((a,b) => {
+    // Sort players by their original turn order to maintain consistent rendering
+    return gameState.player_turn_order.indexOf(a.player_id) - gameState.player_turn_order.indexOf(b.player_id);
+  });
+  
   const currentPlayerHasDefenseCard = myPlayer ? myPlayer.has_defense_card_in_hand : false;
 
-  // Find the human opponent for swap if any, otherwise just show first available opponent's hand_size
-  const humanOpponentForSwap = otherPlayers.find(p => !p.is_bot);
+  // Find the first active human opponent for swap display purposes
+  const humanOpponentForSwap = allPlayers.find(p => p.player_id !== myPlayerId && !p.is_bot && !p.has_lost);
   const opponentPlayerIdForSwap = humanOpponentForSwap ? humanOpponentForSwap.player_id : null;
   const opponentHandSizeForSwap = humanOpponentForSwap ? humanOpponentForSwap.hand_size : 0;
 
@@ -424,7 +433,7 @@ function MultiPlayerGame({ socket }) {
   return (
     <div className="game-container">
       <div className="game-board-area">
-        <div className="game-board">
+        <div className={`game-board game-board--${allPlayers.length}-players`}>
           {/* Render Player Zones dynamically */}
           {allPlayers.map(player => (
             <PlayerZone

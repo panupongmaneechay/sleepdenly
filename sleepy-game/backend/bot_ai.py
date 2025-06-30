@@ -58,11 +58,11 @@ def make_bot_move(game_state):
 
     # Get lists of all human and bot players, excluding self
     all_players_ids = current_game_state["player_turn_order"]
-    human_players = [p_id for p_id in all_players_ids if not current_game_state["players"][p_id].get('is_bot', False) and p_id != bot_player_id and not check_player_lost(current_game_state, p_id)]
-    bot_players = [p_id for p_id in all_players_ids if current_game_state["players"][p_id].get('is_bot', False) and p_id != bot_player_id and not check_player_lost(current_game_state, p_id)]
+    # Filter for active opponents (not self, not lost)
+    active_opponents = [p_id for p_id in all_players_ids if p_id != bot_player_id and not check_player_lost(current_game_state, p_id)]
+    human_opponents = [p_id for p_id in active_opponents if not current_game_state["players"][p_id].get('is_bot', False)]
+    bot_opponents = [p_id for p_id in active_opponents if current_game_state["players"][p_id].get('is_bot', False)]
 
-    # Combined list of all other active players
-    all_other_active_players = human_players + bot_players 
 
     # Bot will attempt to play cards until it can't or chooses to end turn
     while True:
@@ -83,10 +83,10 @@ def make_bot_move(game_state):
         # Strategy for Thief Card
         if thief_card_index != -1:
             # Prefer stealing from human players first if their hand is not empty
-            eligible_steal_targets = [p_id for p_id in human_players if len(current_game_state["players"][p_id]["hand"]) > 0]
+            eligible_steal_targets = [p_id for p_id in human_opponents if len(current_game_state["players"][p_id]["hand"]) > 0]
             if not eligible_steal_targets:
                 # Then consider stealing from other bots if their hand is not empty
-                eligible_steal_targets = [p_id for p_id in bot_players if len(current_game_state["players"][p_id]["hand"]) > 0]
+                eligible_steal_targets = [p_id for p_id in bot_opponents if len(current_game_state["players"][p_id]["hand"]) > 0]
 
             if eligible_steal_targets:
                 target_player_id = random.choice(eligible_steal_targets)
@@ -103,7 +103,7 @@ def make_bot_move(game_state):
         # Strategy for Swap Card
         if swap_card_index != -1:
             eligible_swap_targets = []
-            for p_id in human_players: # Prefer swapping with human players
+            for p_id in human_opponents: # Prefer swapping with human players
                 player_hand_size_excluding_swap = len([c for i, c in enumerate(bot_hand) if i != swap_card_index])
                 opponent_hand_size = len(current_game_state["players"][p_id]["hand"])
                 if player_hand_size_excluding_swap > 0 and opponent_hand_size > 0:
@@ -141,7 +141,7 @@ def make_bot_move(game_state):
                 break
 
         if lucky_card_index != -1:
-            bot_characters = current_game_state["players"][bot_player_id]["characters"]
+            bot_characters = bot_player_data["characters"]
             target_chars = [c for c in bot_characters if not c["is_asleep"] and c["current_sleep"] < c["max_sleep"]]
             if target_chars:
                 # Prioritize character closest to sleeping (smallest sleep needed)
@@ -157,14 +157,13 @@ def make_bot_move(game_state):
                 continue 
 
         # Attack Card strategy: Prioritize putting opponent characters to sleep (exact match or most damage)
-        # Iterate through attack cards and targets to find the best immediate impact
         best_attack_card_idx = -1
         best_attack_target_char_id = None
         best_attack_value = -float('inf') # Aim for largest negative sleep effect
 
         for card_index_in_hand, card in enumerate(bot_hand): 
             if card["type"] == "attack":
-                for target_p_id in all_other_active_players:
+                for target_p_id in active_opponents: # Iterate through all active opponents
                     target_player_characters = current_game_state["players"][target_p_id]["characters"]
                     for char in target_player_characters:
                         if not char["is_asleep"]:
@@ -180,8 +179,10 @@ def make_bot_move(game_state):
                                 best_attack_card_idx = card_index_in_hand
                                 best_attack_target_char_id = char["id"]
                                 best_attack_value = card["effect"]["value"]
-                if best_attack_card_idx != -1 and best_attack_value == 0: # If perfect attack found
-                    break
+                    if best_attack_card_idx != -1 and best_attack_value == 0: # If perfect attack found for any char/player
+                        break 
+            if best_attack_card_idx != -1 and best_attack_value == 0: # If perfect attack found, break outer loop
+                break
 
         if best_attack_card_idx != -1:
             try:
@@ -199,7 +200,7 @@ def make_bot_move(game_state):
         best_support_target_char_id = None
         best_support_sleep_needed = float('inf') # Aim for character needing least sleep
 
-        bot_characters = current_game_state["players"][bot_player_id]["characters"]
+        bot_characters = bot_player_data["characters"]
         for card_index_in_hand, card in enumerate(bot_hand):
             if card["type"] == "support":
                 for char in bot_characters:
