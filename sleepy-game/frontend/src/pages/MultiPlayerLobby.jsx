@@ -1,63 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-// Removed `io from 'socket.io-client'`
 import '../styles/MainMenu.css'; 
 
-// Removed: const socket = io(SOCKET_SERVER_URL, ...);
-
-function MultiPlayerLobby({ socket }) { // Receive socket as prop
+function MultiPlayerLobby({ socket }) {
   const [roomId, setRoomId] = useState('');
   const [message, setMessage] = useState('');
+  const [totalPlayers, setTotalPlayers] = useState(2); // Default to 2 players
+  const [numBots, setNumBots] = useState(0); // Default to 0 bots
   const navigate = useNavigate();
 
   useEffect(() => {
-    // No need to call socket.connect() here, it's connected in App.js
-    // Ensure socket is available
     if (!socket) {
         setMessage("Socket connection not available. Please restart the app.");
         return;
     }
 
-    // Event listener for room creation confirmation from server
     socket.on('room_created', (data) => {
-      setMessage(`Room created! Share this ID: ${data.room_id}. Waiting for opponent...`);
+      setMessage(`Room created! Share this ID: ${data.room_id}. Waiting for ${data.players_needed} human player(s)...`);
       setRoomId(data.room_id); 
     });
 
-    // Event listener for joining an existing room
     socket.on('room_joined', (data) => {
       setMessage(`Joined room ${data.room_id}. Waiting for game to start...`);
     });
 
-    // Event listener for game start (emitted by server when 2 players are in room)
     socket.on('game_start', (data) => {
         console.log("Lobby: Game start signal received. Navigating to game.", data);
-        // Determine myPlayerId based on SID from the game_start data
-        // `socket.id` here is the current active SID from App.js
-        const player1_sid_in_room = data.players_sids.player1.sid;
-        const player2_sid_in_room = data.players_sids.player2.sid;
+        const assignedPlayerId = Object.keys(data.initial_game_states).find(
+            playerId => data.initial_game_states[playerId].sid === socket.id
+        );
         
-        let assignedPlayerId = null;
-        if (socket.id === player1_sid_in_room) {
-            assignedPlayerId = 'player1';
-        } else if (socket.id === player2_sid_in_room) {
-            assignedPlayerId = 'player2';
-        }
-
         if (assignedPlayerId) {
             navigate(`/multiplayer-game/${data.room_id}`, { 
                 state: { 
                     playerId: assignedPlayerId,
-                    initialGameState: assignedPlayerId === 'player1' ? data.player1_game_state : data.player2_game_state
+                    initialGameState: data.initial_game_states[assignedPlayerId].game_state
                 } 
             });
         } else {
-            // This case should ideally not happen if SIDs are correctly managed.
-            // It means current socket.id is not recognized in the room.
             setMessage("Failed to determine your player ID. Returning to lobby.");
-            console.error("Lobby: Current socket.id not found in players_sids from game_start event.");
-            // Optional: socket.disconnect(); // Force disconnect and clean up if confused state
-            // navigate('/multiplayer-lobby'); // Or just stay on lobby
+            console.error("Lobby: Current socket.id not found in initial_game_states from game_start event.");
         }
     });
 
@@ -70,7 +52,6 @@ function MultiPlayerLobby({ socket }) { // Receive socket as prop
       console.error("Socket connection error:", error);
     });
 
-    // Clean up on component unmount (remove listeners specific to this component)
     return () => {
       socket.off('room_created');
       socket.off('room_joined');
@@ -78,26 +59,57 @@ function MultiPlayerLobby({ socket }) { // Receive socket as prop
       socket.off('join_error');
       socket.off('connect_error');
     };
-  }, [navigate, socket]); // Add socket to dependencies
+  }, [navigate, socket]);
 
   const handleCreateRoom = () => {
     setMessage('Creating room...');
-    socket.emit('create_room'); // No need to send sid, backend uses request.sid
+    socket.emit('create_room', { total_players: totalPlayers, num_bots: numBots });
   };
 
   const handleJoinRoom = () => {
     if (roomId.trim()) {
       setMessage(`Joining room ${roomId}...`);
-      socket.emit('join_room', { room_id: roomId.trim() }); // No need to send sid, backend uses request.sid
+      socket.emit('join_room', { room_id: roomId.trim() });
     } else {
       setMessage('Please enter a room ID.');
     }
   };
 
+  const handleTotalPlayersChange = (e) => {
+    const value = parseInt(e.target.value, 10);
+    setTotalPlayers(value);
+    if (numBots >= value) { // Ensure numBots doesn't exceed totalPlayers - 1
+      setNumBots(value - 1);
+    }
+  };
+
+  const handleNumBotsChange = (e) => {
+    const value = parseInt(e.target.value, 10);
+    setNumBots(value);
+  };
+
+  const maxBotsAllowed = totalPlayers - 1;
+
   return (
     <div className="main-menu-container">
       <h1>Multiplayer Lobby</h1>
       <div className="lobby-actions">
+        <div className="game-settings">
+          <label htmlFor="totalPlayers">Total Players:</label>
+          <select id="totalPlayers" value={totalPlayers} onChange={handleTotalPlayersChange}>
+            <option value={2}>2</option>
+            <option value={3}>3</option>
+            <option value={4}>4</option>
+          </select>
+
+          <label htmlFor="numBots">Number of Bots:</label>
+          <select id="numBots" value={numBots} onChange={handleNumBotsChange} disabled={totalPlayers === 1}>
+            {[...Array(maxBotsAllowed + 1).keys()].map(i => (
+              <option key={i} value={i}>{i}</option>
+            ))}
+          </select>
+        </div>
+
         <button onClick={handleCreateRoom}>Create New Room</button>
         <div className="join-room-section">
           <input

@@ -7,6 +7,7 @@
     padding: 20px;
     min-height: 100vh;
     box-sizing: border-box;
+    flex-wrap: wrap; /* Allow wrapping for smaller screens */
 }
 
 /* Area containing both player zones, player hand, and the new info/log area */
@@ -15,15 +16,16 @@
     flex-direction: column;
     gap: 20px;
     flex-grow: 1; /* Allow it to take available space */
-    max-width: 900px; /* Limit overall width for better readability */
+    max-width: 1200px; /* Increased overall width for more players */
+    width: 100%; /* Ensure it takes full width when wrapped */
 }
 
 /* Specific styling for the actual game board (player zones) */
 .game-board {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap; /* Allow player zones to wrap */
     gap: 20px;
-    /* No flex-grow here, as game-board-area handles the main layout */
+    justify-content: center; /* Center player zones */
 }
 
 
@@ -100,6 +102,7 @@ body.dark-mode .hand-card.dragging {
     gap: 20px; /* Space between info panel and game log */
     width: 100%; /* Take full width of its parent */
     margin-top: 20px; /* Space below player hand */
+    max-width: 300px; /* Limit width of info/log area */
 }
 
 /* Keep InformationPanel styles */
@@ -367,4 +370,21 @@ body.dark-mode .defense-prompt-container h3 {
 }
 .defense-actions button:first-child:hover {
     background-color: #138496;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .game-container {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .game-board-area {
+        max-width: 100%;
+    }
+
+    .info-and-log-area {
+        max-width: 100%;
+        margin-top: 20px;
+    }
 }

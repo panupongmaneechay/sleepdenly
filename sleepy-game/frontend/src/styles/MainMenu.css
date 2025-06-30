@@ -61,3 +61,29 @@ body.dark-mode .main-menu-container h1 {
 body.dark-mode .lobby-message {
   color: #87CEEB; /* Lighter blue for dark mode */
 }
+
+.game-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.game-settings label {
+    font-size: 1.1em;
+    color: #555;
+}
+
+body.dark-mode .game-settings label {
+    color: #ccc;
+}
+
+.game-settings select {
+    padding: 8px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    font-size: 1em;
+    min-width: 100px;
+    text-align: center;
+}

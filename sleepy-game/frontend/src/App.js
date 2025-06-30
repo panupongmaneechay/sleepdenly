@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import MainMenu from './pages/MainMenu';
-import SinglePlayerGame from './pages/SinglePlayerGame';
 import MultiPlayerLobby from './pages/MultiPlayerLobby';
 import MultiPlayerGame from './pages/MultiPlayerGame';
 import DarkModeToggle from './components/DarkModeToggle';
@@ -58,7 +57,6 @@ function App() {
           <DarkModeToggle isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
           <Routes>
             <Route path="/" element={<MainMenu />} />
-            <Route path="/single-player" element={<SinglePlayerGame />} />
             {/* Pass the single socket instance to Lobby and Game components */}
             <Route path="/multiplayer-lobby" element={<MultiPlayerLobby socket={socket} />} />
             <Route path="/multiplayer-game/:roomId" element={<MultiPlayerGame socket={socket} />} />
