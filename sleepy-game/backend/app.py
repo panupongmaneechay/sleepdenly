@@ -410,3 +410,6 @@ def trigger_bot_move(room_id):
         # If bot played an attacking card and now it's its turn again, but the target human needs to defend first
         # No recursive call here, waiting for human to resolve
         pass
+
+if __name__ == '__main__':
+    socketio.run(app, host='0.0.0.0', port=5000)

@@ -1,0 +1,35 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend # Path to your backend folder
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000" # Map host port 5000 to container port 5000
+    volumes:
+      # Optional: Mount your code for live changes during development (remove for production)
+      - ./backend:/app
+    environment:
+      # Ensure Flask development mode is off for production
+      - FLASK_ENV=production
+      - FLASK_APP=app.py # Make sure this matches your app entry point
+
+  frontend:
+    build:
+      context: ./frontend # Path to your frontend folder
+      dockerfile: Dockerfile
+      args:
+        # Pass the backend URL as a build-time argument to the frontend Dockerfile
+        # สำหรับเบราว์เซอร์ที่เชื่อมต่อกับ Nginx บน localhost:3000
+        # Nginx จะ Proxy ไปยัง http://backend:5000
+        REACT_APP_BACKEND_URL: http://localhost:5000
+    ports:
+      - "3000:80" # Map host port 3000 to container port 80 (Nginx default)
+    depends_on:
+      - backend # Ensure backend starts before frontend
+    environment:
+      # ค่านี้จะถูกใช้หากคุณรัน frontend ด้วย npm start ใน Docker container (แต่ตอนนี้เราใช้ Nginx แล้ว)
+      # และ 'backend' คือชื่อ service ในเครือข่าย Docker Compose
+      REACT_APP_BACKEND_URL: http://backend:5000

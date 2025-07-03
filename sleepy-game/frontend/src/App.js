@@ -15,7 +15,8 @@ import './styles/CardEffects.css';
 // Import Socket.IO client here, create a single instance
 import io from 'socket.io-client';
 
-const SOCKET_SERVER_URL = 'http://127.0.0.1:5000';
+// const SOCKET_SERVER_URL = 'http://127.0.0.1:5000';
+const SOCKET_SERVER_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
 const socket = io(SOCKET_SERVER_URL, {
   transports: ['websocket', 'polling'],
   // No forceNew here, we want to maintain this single connection
